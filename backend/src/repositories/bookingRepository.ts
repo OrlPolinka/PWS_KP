@@ -23,14 +23,102 @@ export class BookingRepository {
     membership_id: string;
     class_date: string;
   }): Promise<Booking> {
-    const result = await query(
-      `INSERT INTO bookings (schedule_id, client_id, membership_id, class_date, class_start, class_end)
-       SELECT s.id, $2, $3, $4, $4::date + s.start_time, $4::date + s.end_time
-       FROM schedule s WHERE s.id = $1
-       RETURNING *`,
-      [data.schedule_id, data.client_id, data.membership_id, data.class_date]
-    );
-    return result.rows[0];
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [data.client_id]);
+
+      const scheduleResult = await client.query(
+        `SELECT id, dance_style_id, day_of_week, start_time, end_time, max_capacity, status
+         FROM schedule WHERE id = $1 FOR UPDATE`,
+        [data.schedule_id]
+      );
+      const schedule = scheduleResult.rows[0];
+      if (!schedule) throw new Error('Schedule not found');
+      if (schedule.status !== 'scheduled') throw new Error('Cannot book a cancelled or completed class');
+      const requestedDate = new Date(`${data.class_date}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data.class_date) ||
+          Number.isNaN(requestedDate.getTime()) ||
+          requestedDate.toISOString().slice(0, 10) !== data.class_date) {
+        throw new Error('A valid class date is required');
+      }
+      if ((requestedDate.getUTCDay() || 7) !== schedule.day_of_week) {
+        throw new Error('Selected date does not match the weekly class day');
+      }
+      if (new Date(`${data.class_date}T${schedule.start_time}`).getTime() <= Date.now()) {
+        throw new Error('Cannot book a class in the past');
+      }
+      const overlappingBooking = await client.query(
+        `SELECT 1 FROM bookings
+         WHERE client_id = $1 AND class_date = $2::date AND status <> 'cancelled'
+           AND class_start < ($2::date + $4::time)
+           AND class_end > ($2::date + $3::time)
+         LIMIT 1`,
+        [data.client_id, data.class_date, schedule.start_time, schedule.end_time]
+      );
+      if (overlappingBooking.rowCount) {
+        throw new Error('You already have a booking that overlaps this class');
+      }
+
+      const membershipResult = await client.query(
+        `SELECT m.id, m.client_id, m.status, m.start_date, m.end_date, m.remaining_visits,
+                (m.start_date <= $3::date AND m.end_date >= $3::date) AS date_valid,
+                (mt.dance_style_id IS NULL OR mt.dance_style_id = $4) AS style_valid
+         FROM memberships m
+         JOIN membership_types mt ON mt.id = m.membership_type_id
+         WHERE m.id = $1 AND m.client_id = $2
+         FOR UPDATE OF m`,
+        [data.membership_id, data.client_id, data.class_date, schedule.dance_style_id]
+      );
+      const membership = membershipResult.rows[0];
+      if (!membership) throw new Error('Membership not found');
+      if (membership.status !== 'active') throw new Error('Membership is not active');
+      if (!membership.date_valid) throw new Error('Membership is not valid on the selected class date');
+      if (!membership.style_valid) throw new Error('Membership does not cover this dance style');
+
+      const [reservedVisitsResult, capacityResult] = await Promise.all([
+        client.query(
+          `SELECT COUNT(*)::int AS count FROM bookings
+           WHERE membership_id = $1 AND status = 'booked'`,
+          [data.membership_id]
+        ),
+        client.query(
+          `SELECT COUNT(*)::int AS count FROM bookings
+           WHERE schedule_id = $1 AND class_date = $2::date AND status <> 'cancelled'`,
+          [data.schedule_id, data.class_date]
+        ),
+      ]);
+
+      const reservedVisits = reservedVisitsResult.rows[0].count as number;
+      if (membership.remaining_visits !== null && reservedVisits >= Number(membership.remaining_visits)) {
+        throw new Error('No remaining visits on this membership');
+      }
+      if (Number(capacityResult.rows[0].count) >= Number(schedule.max_capacity)) {
+        throw new Error('Class is fully booked');
+      }
+
+      const result = await client.query(
+        `INSERT INTO bookings (schedule_id, client_id, membership_id, class_date, class_start, class_end)
+         VALUES ($1, $2, $3, $4::date, $4::date + $5::time, $4::date + $6::time)
+         RETURNING *`,
+        [data.schedule_id, data.client_id, data.membership_id, data.class_date, schedule.start_time, schedule.end_time]
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      const databaseError = error as { code?: string; constraint?: string };
+      if (databaseError.code === '23P01') {
+        throw new Error('You already have a booking that overlaps this class');
+      }
+      if (databaseError.code === '23505' && databaseError.constraint === 'uq_booking_client_schedule_active') {
+        throw new Error('Already booked for this class');
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   static async hasOverlappingBooking(clientId: string, classDate: string, startTime: string, endTime: string): Promise<boolean> {

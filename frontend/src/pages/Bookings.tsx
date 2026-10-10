@@ -78,7 +78,7 @@ const BookingsPage = () => {
       });
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Ошибка бронирования');
+      alert(error.response?.data?.error || 'Ошибка бронирования');
     }
   };
 
