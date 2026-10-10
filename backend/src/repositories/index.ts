@@ -1,0 +1,11 @@
+export { UserRepository } from './userRepository';
+export { TrainerRepository } from './trainerRepository';
+export { ScheduleRepository } from './scheduleRepository';
+export { MembershipTypeRepository } from './membershipTypeRepository';
+export { MembershipRepository } from './membershipRepository';
+export { BookingRepository } from './bookingRepository';
+export { AttendanceRepository } from './attendanceRepository';
+export { MessageRepository } from './messageRepository';
+export { NewsRepository } from './newsRepository';
+export { NotificationRepository } from './notificationRepository';
+export { DanceStyleRepository } from './danceStyleRepository';

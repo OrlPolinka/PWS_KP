@@ -1,0 +1,12 @@
+export { AuthService } from './authService';
+export { UserService } from './userService';
+export { TrainerService } from './trainerService';
+export { ScheduleService } from './scheduleService';
+export { MembershipTypeService } from './membershipTypeService';
+export { MembershipService } from './membershipService';
+export { BookingService } from './bookingService';
+export { AttendanceService } from './attendanceService';
+export { MessageService } from './messageService';
+export { NewsService } from './newsService';
+export { NotificationService } from './notificationService';
+export { DanceStyleService } from './danceStyleService';

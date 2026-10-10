@@ -1,0 +1,12 @@
+export { AuthController } from './authController';
+export { UserController } from './userController';
+export { TrainerController } from './trainerController';
+export { ScheduleController } from './scheduleController';
+export { MembershipTypeController } from './membershipTypeController';
+export { MembershipController } from './membershipController';
+export { BookingController } from './bookingController';
+export { AttendanceController } from './attendanceController';
+export { MessageController } from './messageController';
+export { NewsController } from './newsController';
+export { NotificationController } from './notificationController';
+export { DanceStyleController } from './danceStyleController';
