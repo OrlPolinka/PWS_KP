@@ -1,7 +1,7 @@
 import { FormEvent, useState, useEffect } from 'react';
 import { CreditCard, Clock, CheckCircle, Plus, Pencil, Trash2, X } from 'lucide-react';
 import api from '../services/api';
-import { MembershipType, Membership } from '../types';
+import { DanceStyle, MembershipType, Membership } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 type MembershipTypeForm = {
@@ -18,11 +18,26 @@ const MembershipsPage = () => {
   const { user } = useAuth();
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [myMemberships, setMyMemberships] = useState<Membership[]>([]);
+  const [danceStyles, setDanceStyles] = useState<DanceStyle[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [myMembershipSearch, setMyMembershipSearch] = useState('');
+  const [myMembershipStatus, setMyMembershipStatus] = useState('');
+  const [myMembershipDateFrom, setMyMembershipDateFrom] = useState('');
+  const [myMembershipDateTo, setMyMembershipDateTo] = useState('');
+  const [visitsFrom, setVisitsFrom] = useState('');
+  const [visitsTo, setVisitsTo] = useState('');
+  const [typeSearch, setTypeSearch] = useState('');
+  const [typeStyle, setTypeStyle] = useState('');
+  const [priceFrom, setPriceFrom] = useState('');
+  const [priceTo, setPriceTo] = useState('');
+  const [durationFrom, setDurationFrom] = useState('');
+  const [durationTo, setDurationTo] = useState('');
+  const [visitPolicy, setVisitPolicy] = useState('');
+  const [typeStatus, setTypeStatus] = useState('active');
 
   useEffect(() => {
     fetchData();
@@ -30,8 +45,12 @@ const MembershipsPage = () => {
 
   const fetchData = async () => {
     try {
-      const typesRes = await api.get<MembershipType[]>('/membership-types');
+      const [typesRes, stylesRes] = await Promise.all([
+        api.get<MembershipType[]>('/membership-types'),
+        api.get<DanceStyle[]>('/dance-styles'),
+      ]);
       setMembershipTypes(typesRes.data);
+      setDanceStyles(stylesRes.data);
       if (user?.role === 'client') {
         const membershipsRes = await api.get<Membership[]>('/memberships/my');
         setMyMemberships(membershipsRes.data);
@@ -104,6 +123,29 @@ const MembershipsPage = () => {
     });
   };
 
+  const visibleMyMemberships = myMemberships.filter((membership) => {
+    const searchText = `${membership.membership_type?.name || membership.membership_type_name || ''}`.toLocaleLowerCase('ru');
+    const startDate = membership.start_date.slice(0, 10);
+    const endDate = membership.end_date.slice(0, 10);
+    const remainingVisits = membership.remaining_visits;
+    return (!myMembershipSearch || searchText.includes(myMembershipSearch.toLocaleLowerCase('ru'))) &&
+      (!myMembershipStatus || membership.status === myMembershipStatus) &&
+      (!myMembershipDateFrom || endDate >= myMembershipDateFrom) &&
+      (!myMembershipDateTo || startDate <= myMembershipDateTo) &&
+      (!visitsFrom || (remainingVisits !== null && remainingVisits >= Number(visitsFrom))) &&
+      (!visitsTo || (remainingVisits !== null && remainingVisits <= Number(visitsTo)));
+  });
+  const visibleMembershipTypes = membershipTypes.filter((type) => {
+    const searchText = `${type.name} ${type.description || ''}`.toLocaleLowerCase('ru');
+    return (user?.role === 'admin' || type.is_active) &&
+      (!typeSearch || searchText.includes(typeSearch.toLocaleLowerCase('ru'))) &&
+      (!typeStyle || String(type.dance_style_id || '') === typeStyle) &&
+      (!priceFrom || type.price >= Number(priceFrom)) && (!priceTo || type.price <= Number(priceTo)) &&
+      (!durationFrom || type.duration_days >= Number(durationFrom)) && (!durationTo || type.duration_days <= Number(durationTo)) &&
+      (!visitPolicy || (visitPolicy === 'unlimited' ? type.visit_count == null : type.visit_count != null)) &&
+      (user?.role !== 'admin' || typeStatus === 'all' || (typeStatus === 'active' ? type.is_active : !type.is_active));
+  });
+
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
   }
@@ -129,8 +171,17 @@ const MembershipsPage = () => {
       {user?.role === 'client' && myMemberships.length > 0 && (
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-4">Мои абонементы</h2>
+          <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-sm">Поиск по названию<input className="input mt-1" value={myMembershipSearch} onChange={(event) => setMyMembershipSearch(event.target.value)} /></label>
+            <label className="text-sm">Статус<select className="input mt-1" value={myMembershipStatus} onChange={(event) => setMyMembershipStatus(event.target.value)}><option value="">Все статусы</option><option value="active">Активен</option><option value="expired">Истек</option><option value="paused">Приостановлен</option><option value="pending_extension">Ожидает продления</option><option value="cancelled">Отменен</option></select></label>
+            <label className="text-sm">Действует по дате от<input type="date" className="input mt-1" value={myMembershipDateFrom} onChange={(event) => setMyMembershipDateFrom(event.target.value)} /></label>
+            <label className="text-sm">Действует по дате до<input type="date" className="input mt-1" value={myMembershipDateTo} onChange={(event) => setMyMembershipDateTo(event.target.value)} /></label>
+            <label className="text-sm">Остаток посещений от<input type="number" min={0} className="input mt-1" value={visitsFrom} onChange={(event) => setVisitsFrom(event.target.value)} /></label>
+            <label className="text-sm">Остаток посещений до<input type="number" min={0} className="input mt-1" value={visitsTo} onChange={(event) => setVisitsTo(event.target.value)} /></label>
+            <p className="text-sm text-textSecondary sm:col-span-2 lg:col-span-3">Найдено абонементов: {visibleMyMemberships.length}</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {myMemberships.map((membership) => (
+            {visibleMyMemberships.length === 0 ? <p className="text-textSecondary">Абонементы по выбранным критериям не найдены</p> : visibleMyMemberships.map((membership) => (
               <div key={membership.id} className="card border-primary">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold">{membership.membership_type?.name}</h3>
@@ -164,8 +215,17 @@ const MembershipsPage = () => {
 
       <div>
         <h2 className="text-xl font-bold mb-4">Доступные абонементы</h2>
+        <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} /></label>
+          <label className="text-sm">Направление<select className="input mt-1" value={typeStyle} onChange={(event) => setTypeStyle(event.target.value)}><option value="">Все направления</option>{danceStyles.map((style) => <option key={style.id} value={style.id}>{style.name}</option>)}</select></label>
+          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Цена от<input type="number" min={0} className="input mt-1" value={priceFrom} onChange={(event) => setPriceFrom(event.target.value)} /></label><label className="text-sm">Цена до<input type="number" min={0} className="input mt-1" value={priceTo} onChange={(event) => setPriceTo(event.target.value)} /></label></div>
+          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Дней от<input type="number" min={1} className="input mt-1" value={durationFrom} onChange={(event) => setDurationFrom(event.target.value)} /></label><label className="text-sm">Дней до<input type="number" min={1} className="input mt-1" value={durationTo} onChange={(event) => setDurationTo(event.target.value)} /></label></div>
+          <label className="text-sm">Посещения<select className="input mt-1" value={visitPolicy} onChange={(event) => setVisitPolicy(event.target.value)}><option value="">Любой вариант</option><option value="limited">С лимитом</option><option value="unlimited">Безлимитный</option></select></label>
+          {user?.role === 'admin' && <label className="text-sm">Статус<select className="input mt-1" value={typeStatus} onChange={(event) => setTypeStatus(event.target.value)}><option value="active">Активные</option><option value="archived">В архиве</option><option value="all">Все</option></select></label>}
+          <p className="pb-2 text-sm text-textSecondary sm:self-end">Найдено типов: {visibleMembershipTypes.length}</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {membershipTypes.filter((type) => user?.role === 'admin' || type.is_active).map((type) => (
+          {visibleMembershipTypes.length === 0 ? <p className="text-textSecondary">Типы абонементов по выбранным критериям не найдены</p> : visibleMembershipTypes.map((type) => (
             <div key={type.id} className="card">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center space-x-3">

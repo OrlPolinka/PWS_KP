@@ -26,6 +26,11 @@ const TrainersPage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [specializationFilter, setSpecializationFilter] = useState('');
+  const [experienceFrom, setExperienceFrom] = useState('');
+  const [experienceTo, setExperienceTo] = useState('');
+  const [publicationFilter, setPublicationFilter] = useState('all');
 
   useEffect(() => {
     fetchTrainers();
@@ -83,6 +88,15 @@ const TrainersPage = () => {
     }
   };
 
+  const visibleTrainers = trainers.filter((trainer) => {
+    const searchText = `${trainer.full_name} ${trainer.email} ${trainer.phone || ''} ${trainer.specialization || ''} ${trainer.bio || ''}`.toLocaleLowerCase('ru');
+    return (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+      (!specializationFilter || trainer.specialization === specializationFilter) &&
+      (!experienceFrom || (trainer.experience_years !== undefined && trainer.experience_years >= Number(experienceFrom))) &&
+      (!experienceTo || (trainer.experience_years !== undefined && trainer.experience_years <= Number(experienceTo))) &&
+      (user?.role !== 'admin' || publicationFilter === 'all' || String(trainer.is_published) === publicationFilter);
+  });
+
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
   }
@@ -108,12 +122,34 @@ const TrainersPage = () => {
       </form>}
       {error && !formOpen && <p role="alert" className="mb-4 text-error">{error}</p>}
 
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm">Поиск по имени, направлению, описанию или email
+          <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, сальса" />
+        </label>
+        <label className="text-sm">Направление
+          <select className="input mt-1" value={specializationFilter} onChange={(event) => setSpecializationFilter(event.target.value)}>
+            <option value="">Все направления</option>
+            {Array.from(new Set(trainers.map((trainer) => trainer.specialization).filter(Boolean))).sort().map((specialization) => <option key={specialization} value={specialization}>{specialization}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm">Опыт от, лет<input type="number" min={0} className="input mt-1" value={experienceFrom} onChange={(event) => setExperienceFrom(event.target.value)} /></label>
+          <label className="text-sm">Опыт до, лет<input type="number" min={0} className="input mt-1" value={experienceTo} onChange={(event) => setExperienceTo(event.target.value)} /></label>
+        </div>
+        {user?.role === 'admin' && <label className="text-sm">Публикация
+          <select className="input mt-1" value={publicationFilter} onChange={(event) => setPublicationFilter(event.target.value)}>
+            <option value="all">Все</option><option value="true">Опубликованные</option><option value="false">Не опубликованные</option>
+          </select>
+        </label>}
+      </div>
+      <p className="mb-4 text-sm text-textSecondary">Найдено тренеров: {visibleTrainers.length}</p>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {trainers.length === 0 ? (
+        {visibleTrainers.length === 0 ? (
           <div className="card col-span-full text-center text-textSecondary">
-            Тренеры пока не добавлены
+            {trainers.length === 0 ? 'Тренеры пока не добавлены' : 'Тренеры по выбранным критериям не найдены'}
           </div>
-        ) : trainers.map((trainer) => (
+        ) : visibleTrainers.map((trainer) => (
           <article
             key={trainer.id}
             className="card min-w-0"

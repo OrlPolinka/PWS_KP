@@ -127,7 +127,7 @@ export interface Membership {
   start_date: string;
   end_date: string;
   remaining_visits: number | null;
-  status: 'active' | 'expired' | 'cancelled';
+  status: 'active' | 'expired' | 'paused' | 'pending_extension' | 'cancelled';
   created_at: string;
   updated_at: string;
   membership_type?: MembershipType;
@@ -138,7 +138,7 @@ export interface Booking {
   client_id: string;
   schedule_id: string;
   membership_id: string;
-  status: 'booked' | 'cancelled' | 'attended';
+  status: 'booked' | 'cancelled' | 'attended' | 'no_show';
   class_date: string;
   start_time?: string;
   end_time?: string;

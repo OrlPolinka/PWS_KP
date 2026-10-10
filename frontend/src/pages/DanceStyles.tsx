@@ -15,6 +15,9 @@ const DanceStylesPage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
 
   useEffect(() => {
     void fetchStyles();
@@ -73,6 +76,13 @@ const DanceStylesPage = () => {
     }
   };
 
+  const visibleStyles = styles.filter((style) => {
+    const searchText = `${style.name} ${style.description || ''}`.toLocaleLowerCase('ru');
+    return (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+      (!difficultyFilter || style.difficulty === difficultyFilter) &&
+      (user?.role !== 'admin' || statusFilter === 'all' || (statusFilter === 'active' ? style.is_active : !style.is_active));
+  });
+
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
   }
@@ -93,12 +103,19 @@ const DanceStylesPage = () => {
         <button type="submit" className="btn btn-primary">{editingId ? 'Сохранить' : 'Добавить'}</button>
       </form>}
 
+      <section className="mb-6 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label className="text-sm">Сложность<select className="input mt-1" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}><option value="">Любая сложность</option><option value="beginner">Начальная</option><option value="intermediate">Средняя</option><option value="advanced">Продвинутая</option></select></label>
+        {user?.role === 'admin' && <label className="text-sm">Статус<select className="input mt-1" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="active">Активные</option><option value="archived">В архиве</option><option value="all">Все</option></select></label>}
+        <p className="pb-2 text-sm text-textSecondary sm:self-end">Найдено стилей: {visibleStyles.length}</p>
+      </section>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {styles.length === 0 ? (
+        {visibleStyles.length === 0 ? (
           <div className="card col-span-full text-center text-textSecondary">
-            Стили танцев пока не добавлены
+            {styles.length === 0 ? 'Стили танцев пока не добавлены' : 'Стили по выбранным критериям не найдены'}
           </div>
-        ) : styles.map((style) => (
+        ) : visibleStyles.map((style) => (
           <article key={style.id} className="card min-w-0">
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">

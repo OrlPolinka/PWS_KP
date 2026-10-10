@@ -36,6 +36,15 @@ const BookingsPage = () => {
   const [selectedMembershipId, setSelectedMembershipId] = useState('');
   const [selectedDates, setSelectedDates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [bookingStatus, setBookingStatus] = useState('');
+  const [bookingDateFrom, setBookingDateFrom] = useState('');
+  const [bookingDateTo, setBookingDateTo] = useState('');
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleStyle, setScheduleStyle] = useState('');
+  const [scheduleTrainer, setScheduleTrainer] = useState('');
+  const [scheduleHall, setScheduleHall] = useState('');
+  const [scheduleDay, setScheduleDay] = useState('');
 
   useEffect(() => {
     const scheduleId = searchParams.get('schedule');
@@ -103,6 +112,25 @@ const BookingsPage = () => {
 
   const formatTime = (timeString?: string) => timeString?.slice(0, 5) || '—';
 
+  const visibleBookings = myBookings.filter((booking) => {
+    const searchText = `${booking.dance_style_name || ''} ${booking.trainer_name || ''} ${booking.hall_name || ''}`.toLocaleLowerCase('ru');
+    const date = booking.class_date.slice(0, 10);
+    return (!bookingSearch || searchText.includes(bookingSearch.toLocaleLowerCase('ru'))) &&
+      (!bookingStatus || booking.status === bookingStatus) &&
+      (!bookingDateFrom || date >= bookingDateFrom) && (!bookingDateTo || date <= bookingDateTo);
+  });
+  const visibleSchedules = availableSchedules.filter((schedule) => {
+    const searchText = `${schedule.dance_style_name} ${schedule.trainer_name} ${schedule.hall_name}`.toLocaleLowerCase('ru');
+    return (!scheduleSearch || searchText.includes(scheduleSearch.toLocaleLowerCase('ru'))) &&
+      (!scheduleStyle || String(schedule.dance_style_id) === scheduleStyle) &&
+      (!scheduleTrainer || schedule.trainer_id === scheduleTrainer) &&
+      (!scheduleHall || schedule.hall_name === scheduleHall) &&
+      (!scheduleDay || schedule.day_of_week === Number(scheduleDay));
+  });
+  const scheduleStyles = Array.from(new Map(availableSchedules.map((schedule) => [String(schedule.dance_style_id), schedule.dance_style_name])));
+  const scheduleTrainers = Array.from(new Map(availableSchedules.map((schedule) => [schedule.trainer_id, schedule.trainer_name])));
+  const scheduleHalls = Array.from(new Set(availableSchedules.map((schedule) => schedule.hall_name))).sort();
+
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
   }
@@ -113,14 +141,21 @@ const BookingsPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
-          <h2 className="text-xl font-bold mb-4">Активные бронирования</h2>
+          <h2 className="text-xl font-bold mb-4">Мои бронирования</h2>
+          <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2">
+            <label className="text-sm">Поиск по занятию, тренеру или залу<input className="input mt-1" value={bookingSearch} onChange={(event) => setBookingSearch(event.target.value)} /></label>
+            <label className="text-sm">Статус<select className="input mt-1" value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}><option value="">Все статусы</option><option value="booked">Забронировано</option><option value="cancelled">Отменено</option><option value="attended">Посещено</option><option value="no_show">Неявка</option></select></label>
+            <label className="text-sm">Дата занятия от<input type="date" className="input mt-1" value={bookingDateFrom} onChange={(event) => setBookingDateFrom(event.target.value)} /></label>
+            <label className="text-sm">Дата занятия до<input type="date" className="input mt-1" value={bookingDateTo} onChange={(event) => setBookingDateTo(event.target.value)} /></label>
+            <p className="text-sm text-textSecondary sm:col-span-2">Найдено: {visibleBookings.length}</p>
+          </div>
           <div className="space-y-4">
-            {myBookings.length === 0 ? (
+            {visibleBookings.length === 0 ? (
               <div className="card text-center py-8 text-textSecondary">
-                У вас нет активных бронирований
+                {myBookings.length === 0 ? 'У вас нет бронирований' : 'Бронирования по выбранным критериям не найдены'}
               </div>
             ) : (
-              myBookings.map((booking) => (
+              visibleBookings.map((booking) => (
                 <div key={booking.id} className="card">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -142,11 +177,12 @@ const BookingsPage = () => {
                     </div>
                     <span className={`px-3 py-1 rounded-full text-sm ${
                       booking.status === 'booked' ? 'bg-success/20 text-success' :
-                      booking.status === 'cancelled' ? 'bg-error/20 text-error' :
+                      booking.status === 'cancelled' || booking.status === 'no_show' ? 'bg-error/20 text-error' :
                       'bg-primary/20 text-primary'
                     }`}>
                       {booking.status === 'booked' ? 'Забронировано' :
-                       booking.status === 'cancelled' ? 'Отменено' : 'Посещено'}
+                       booking.status === 'cancelled' ? 'Отменено' :
+                       booking.status === 'no_show' ? 'Неявка' : 'Посещено'}
                     </span>
                   </div>
 
@@ -167,13 +203,21 @@ const BookingsPage = () => {
 
         <div>
           <h2 className="text-xl font-bold mb-4">Доступные занятия</h2>
+          <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2">
+            <label className="text-sm">Поиск по занятию, тренеру или залу<input className="input mt-1" value={scheduleSearch} onChange={(event) => setScheduleSearch(event.target.value)} /></label>
+            <label className="text-sm">Стиль<select className="input mt-1" value={scheduleStyle} onChange={(event) => setScheduleStyle(event.target.value)}><option value="">Все стили</option>{scheduleStyles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+            <label className="text-sm">Тренер<select className="input mt-1" value={scheduleTrainer} onChange={(event) => setScheduleTrainer(event.target.value)}><option value="">Все тренеры</option>{scheduleTrainers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+            <label className="text-sm">Зал<select className="input mt-1" value={scheduleHall} onChange={(event) => setScheduleHall(event.target.value)}><option value="">Все залы</option>{scheduleHalls.map((hall) => <option key={hall} value={hall}>{hall}</option>)}</select></label>
+            <label className="text-sm">День недели<select className="input mt-1" value={scheduleDay} onChange={(event) => setScheduleDay(event.target.value)}><option value="">Все дни</option>{Array.from({ length: 7 }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{dayNames[day % 7]}</option>)}</select></label>
+            <p className="text-sm text-textSecondary sm:self-end">Найдено: {visibleSchedules.length}</p>
+          </div>
           <div className="space-y-4">
-            {availableSchedules.length === 0 ? (
+            {visibleSchedules.length === 0 ? (
               <div className="card text-center py-8 text-textSecondary">
-                Нет доступных занятий
+                {availableSchedules.length === 0 ? 'Нет доступных занятий' : 'Занятия по выбранным критериям не найдены'}
               </div>
             ) : (
-              availableSchedules.map((schedule) => (
+              visibleSchedules.map((schedule) => (
                 <div key={schedule.id} className="card">
                   <div className="flex items-start justify-between mb-4">
                     <div>

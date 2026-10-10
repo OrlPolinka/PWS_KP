@@ -45,7 +45,17 @@ const SchedulePage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedTrainer, setSelectedTrainer] = useState(searchParams.get('trainer') || '');
+  const [selectedStyle, setSelectedStyle] = useState(searchParams.get('style') || '');
+  const [selectedHall, setSelectedHall] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('scheduled');
+  const [timeFrom, setTimeFrom] = useState('');
+  const [timeTo, setTimeTo] = useState('');
+  const [capacityFrom, setCapacityFrom] = useState('');
+  const [capacityTo, setCapacityTo] = useState('');
 
   useEffect(() => {
     fetchSchedules();
@@ -123,12 +133,39 @@ const SchedulePage = () => {
       window.alert(deleteError.response?.data?.error || 'Не удалось удалить занятие');
     }
   };
-  const trainerFilter = searchParams.get('trainer');
-  const styleFilter = searchParams.get('style');
-  const visibleSchedules = schedules.filter((schedule) => schedule.status === 'scheduled' &&
-    (!trainerFilter || schedule.trainer_id === trainerFilter) &&
-    (!styleFilter || String(schedule.dance_style_id) === styleFilter)
-  );
+  const visibleSchedules = schedules.filter((schedule) => {
+    const searchText = `${schedule.dance_style_name} ${schedule.trainer_name} ${schedule.hall_name}`.toLocaleLowerCase('ru');
+    const start = formatTime(schedule.start_time);
+    const end = formatTime(schedule.end_time);
+    return (user?.role === 'admin'
+      ? selectedStatus === 'all' || schedule.status === selectedStatus
+      : schedule.status === 'scheduled') &&
+      (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+      (!selectedDay || String(schedule.day_of_week) === selectedDay) &&
+      (!selectedTrainer || schedule.trainer_id === selectedTrainer) &&
+      (!selectedStyle || String(schedule.dance_style_id) === selectedStyle) &&
+      (!selectedHall || schedule.hall_name === selectedHall) &&
+      (!timeFrom || start >= timeFrom) && (!timeTo || end <= timeTo) &&
+      (!capacityFrom || schedule.max_capacity >= Number(capacityFrom)) &&
+      (!capacityTo || schedule.max_capacity <= Number(capacityTo));
+  });
+  const trainerOptions = Array.from(new Map(schedules.map((schedule) => [schedule.trainer_id, schedule.trainer_name])));
+  const styleOptions = Array.from(new Map(schedules.map((schedule) => [String(schedule.dance_style_id), schedule.dance_style_name])));
+  const hallOptions = Array.from(new Set(schedules.map((schedule) => schedule.hall_name))).sort();
+
+  const resetFilters = () => {
+    setSearchParams({});
+    setSearch('');
+    setSelectedDay('');
+    setSelectedTrainer('');
+    setSelectedStyle('');
+    setSelectedHall('');
+    setSelectedStatus('scheduled');
+    setTimeFrom('');
+    setTimeTo('');
+    setCapacityFrom('');
+    setCapacityTo('');
+  };
 
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
@@ -144,6 +181,18 @@ const SchedulePage = () => {
           </button>
         )}
       </div>
+
+      <section className="mb-8 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm">Поиск по стилю, тренеру или залу<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label className="text-sm">День недели<select className="input mt-1" value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}><option value="">Все дни</option>{weekDays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}</select></label>
+        <label className="text-sm">Тренер<select className="input mt-1" value={selectedTrainer} onChange={(event) => setSelectedTrainer(event.target.value)}><option value="">Все тренеры</option>{trainerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <label className="text-sm">Стиль<select className="input mt-1" value={selectedStyle} onChange={(event) => setSelectedStyle(event.target.value)}><option value="">Все стили</option>{styleOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <label className="text-sm">Зал<select className="input mt-1" value={selectedHall} onChange={(event) => setSelectedHall(event.target.value)}><option value="">Все залы</option>{hallOptions.map((hall) => <option key={hall} value={hall}>{hall}</option>)}</select></label>
+        {user?.role === 'admin' && <label className="text-sm">Статус занятия<select className="input mt-1" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}><option value="scheduled">Запланировано</option><option value="cancelled">Отменено</option><option value="completed">Завершено</option><option value="rescheduled">Перенесено</option><option value="all">Все статусы</option></select></label>}
+        <div className="grid grid-cols-2 gap-3"><label className="text-sm">Начало не раньше<input type="time" className="input mt-1" value={timeFrom} onChange={(event) => setTimeFrom(event.target.value)} /></label><label className="text-sm">Окончание не позже<input type="time" className="input mt-1" value={timeTo} onChange={(event) => setTimeTo(event.target.value)} /></label></div>
+        <div className="grid grid-cols-2 gap-3"><label className="text-sm">Мест от<input type="number" min={1} className="input mt-1" value={capacityFrom} onChange={(event) => setCapacityFrom(event.target.value)} /></label><label className="text-sm">Мест до<input type="number" min={1} className="input mt-1" value={capacityTo} onChange={(event) => setCapacityTo(event.target.value)} /></label></div>
+        <div className="flex items-end justify-between gap-3"><span className="pb-2 text-sm text-textSecondary">Найдено: {visibleSchedules.length}</span><button type="button" onClick={resetFilters} className="pb-2 text-sm text-primary hover:underline">Сбросить</button></div>
+      </section>
 
       {formOpen && user?.role === 'admin' && (
         <form onSubmit={saveSchedule} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -182,7 +231,7 @@ const SchedulePage = () => {
         </form>
       )}
 
-      {visibleSchedules.length === 0 ? <div className="card text-center text-textSecondary">На этой неделе занятий нет</div> : <div className="space-y-8">
+      {visibleSchedules.length === 0 ? <div className="card text-center text-textSecondary">{schedules.length === 0 ? 'На этой неделе занятий нет' : 'Занятий по выбранным критериям не найдено'}</div> : <div className="space-y-8">
         {weekDays.map((day) => {
           const daySchedules = visibleSchedules.filter((schedule) => schedule.day_of_week === day.value);
           return (
