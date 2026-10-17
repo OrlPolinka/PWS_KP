@@ -1,7 +1,6 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { config } from './index';
-import { AuthService } from '../services';
 
 passport.use(
   new GoogleStrategy(
@@ -10,19 +9,11 @@ passport.use(
       clientSecret: config.google.clientSecret,
       callbackURL: config.google.callbackUrl,
     },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const email = profile.emails?.[0]?.value;
-        if (!email) throw new Error('Google account did not provide an email address');
-        const user = await AuthService.googleLogin({
-          email,
-          name: profile.displayName,
-          picture: profile.photos?.[0]?.value,
-        });
-        return done(null, profile as unknown as Express.User);
-      } catch (error: any) {
-        return done(error);
+    (accessToken, refreshToken, profile, done) => {
+      if (!profile.emails?.[0]?.value) {
+        return done(new Error('Google account did not provide an email address'));
       }
+      return done(null, profile as unknown as Express.User);
     }
   )
 );

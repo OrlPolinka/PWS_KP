@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { User, AuthContextType, RegisterData } from '../types';
 import { authService } from '../services/authService';
 
@@ -50,6 +50,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
   };
 
+  const completeGoogleLogin = useCallback((data: { user: User; token: string }) => {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -58,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, completeGoogleLogin, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserPlus } from 'lucide-react';
+import { authService } from '../services/authService';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -143,6 +144,16 @@ const Register = () => {
               <span>{loading ? 'Регистрация...' : 'Зарегистрироваться'}</span>
             </button>
           </form>
+
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => authService.googleLogin()}
+              className="btn btn-secondary w-full flex items-center justify-center space-x-2"
+            >
+              <span>Зарегистрироваться через Google</span>
+            </button>
+          </div>
 
           <div className="mt-6 text-center text-textSecondary">
             Уже есть аккаунт?{' '}

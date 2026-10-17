@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services';
 import { AppError } from '../middleware/errorHandler';
+import { config } from '../config';
 
 export class AuthController {
   static async register(req: Request, res: Response) {
@@ -47,26 +48,40 @@ export class AuthController {
 
   static async googleCallback(req: Request, res: Response) {
     try {
-      const user = req.user as any;
+      const profile = req.user as Express.User & {
+        emails?: Array<{ value: string }>;
+        displayName?: string;
+        photos?: Array<{ value: string }>;
+      };
+      const email = profile.emails?.[0]?.value;
+      if (!email) {
+        throw new Error('Google account did not provide an email address');
+      }
       const result = await AuthService.googleLogin({
-        email: user.emails[0].value,
-        name: user.displayName,
-        picture: user.photos?.[0]?.value,
+        email,
+        name: profile.displayName || email,
+        picture: profile.photos?.[0]?.value,
       });
-      
-      res.json({
-        user: {
-          id: result.user.id,
-          email: result.user.email,
-          role: result.user.role,
-          full_name: result.user.full_name,
-          photo_url: result.user.photo_url,
-        },
+
+      const user = {
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role,
+        full_name: result.user.full_name,
+        phone: result.user.phone,
+        photo_url: result.user.photo_url,
+        is_active: result.user.is_active,
+      };
+      const callbackPayload = new URLSearchParams({
         token: result.token,
-        isNewUser: result.isNewUser,
+        user: JSON.stringify(user),
       });
+      res.redirect(
+        `${config.frontendUrl.replace(/\/+$/, '')}/auth/callback#${callbackPayload.toString()}`
+      );
     } catch (error: any) {
-      throw new AppError(400, error.message);
+      console.error('Google OAuth callback failed:', error);
+      res.redirect(`${config.frontendUrl.replace(/\/+$/, '')}/login?error=google_auth_failed`);
     }
   }
 

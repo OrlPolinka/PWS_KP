@@ -19,6 +19,7 @@ import ScheduleDetails from './pages/ScheduleDetails';
 import DanceStyleDetails from './pages/DanceStyleDetails';
 import MembershipExtensionRequests from './pages/MembershipExtensionRequests';
 import TrainerAttendance from './pages/TrainerAttendance';
+import GoogleAuthCallback from './pages/GoogleAuthCallback';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -61,6 +62,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/auth/callback" element={<GoogleAuthCallback />} />
           <Route path="/login" element={
             <PublicRoute>
               <Login />

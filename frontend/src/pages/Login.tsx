@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn } from 'lucide-react';
+import { authService } from '../services/authService';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +29,7 @@ const Login = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/auth/google';
+    authService.googleLogin();
   };
 
   return (
@@ -42,6 +44,11 @@ const Login = () => {
           {error && (
             <div className="bg-error/10 border border-error text-error px-4 py-3 rounded-lg mb-6">
               {error}
+            </div>
+          )}
+          {searchParams.get('error') === 'google_auth_failed' && (
+            <div className="bg-error/10 border border-error text-error px-4 py-3 rounded-lg mb-6">
+              Не удалось войти через Google. Проверьте настройки OAuth и попробуйте снова.
             </div>
           )}
 

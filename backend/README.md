@@ -57,7 +57,7 @@ JWT_EXPIRES_IN=7d
 
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
 
 PAYMENT_MODE=mock
 FRONTEND_URL=http://localhost:5173
@@ -65,6 +65,26 @@ FRONTEND_URL=http://localhost:5173
 PORT=3000
 NODE_ENV=development
 ```
+
+### Google sign-in and registration
+
+Google OAuth is for client accounts: an existing account is signed in by matching its Google email, and a new Google email creates a client account. To configure it:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), select or create a project and configure the OAuth consent screen (Google Auth Platform). During development, use **External** audience and add your Google account under **Test users**.
+2. Create an OAuth client ID of type **Web application**.
+3. Add this authorized redirect URI exactly:
+   `http://localhost:3000/api/auth/google/callback`
+   Optionally add the frontend origin `http://localhost:5173` to authorized JavaScript origins.
+4. Copy the generated client ID and client secret into `backend/.env`; set:
+   ```env
+   GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=...
+   GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+   FRONTEND_URL=http://localhost:5173
+   ```
+5. In `frontend/.env`, set `VITE_API_URL=http://localhost:3000/api`. Restart both servers.
+
+For deployment, use HTTPS addresses for the frontend and backend and add the exact production callback URL to the Google OAuth client as well. While the consent screen is in testing mode, only listed test users can sign in. If you change hostnames, ports, or the `/api` prefix, update the redirect URI in both Google Cloud Console and `GOOGLE_CALLBACK_URL`.
 
 In development, payments use a local simulator by default. No Stripe account, API keys, or external payment request are needed. After clicking **Оплатить**, a card form opens. Enter `4242 4242 4242 4242` for a successful test payment or `4000 0000 0000 0002` to simulate a bank decline. The form also requires a future expiry date in `MM/YY` format, any three-digit CVC, and a postal code. Confirming the successful test card creates the membership and records a BYN payment; a declined card does not. This is only a local simulation and does not move money. Card details are checked in the browser and are not sent to or stored by the backend.
 
@@ -126,7 +146,7 @@ npm start
 ### Authentication
 - `POST /api/auth/register` - Register new user (clients only)
 - `POST /api/auth/login` - Login with email/password (all roles)
-- `GET /api/auth/google` - Google OAuth login (clients only)
+- `GET /api/auth/google` - Google OAuth sign-in or client registration
 - `GET /api/auth/google/callback` - Google OAuth callback
 - `POST /api/auth/change-password` - Change password
 - `GET /api/auth/me` - Get current user info

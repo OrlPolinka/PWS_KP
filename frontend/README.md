@@ -43,6 +43,8 @@ Edit `.env`:
 VITE_API_URL=http://localhost:3000/api
 ```
 
+For Google sign-in and registration, configure the OAuth web client in Google Cloud Console. Add `http://localhost:3000/api/auth/google/callback` as an authorized redirect URI, then set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and the same `GOOGLE_CALLBACK_URL` in `backend/.env`. During development, add your Google account as a test user in the OAuth consent configuration. See the backend README for the full setup steps.
+
 ## Running
 
 Development mode:
