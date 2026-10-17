@@ -29,24 +29,18 @@ export class MembershipService {
 
   static async requestMembershipExtension(
     membershipId: string,
-    requestedDays: number,
-    reason?: string
+    clientId: string,
+    quantity: number,
+    unit: 'days' | 'visits',
+    reason: string
   ): Promise<any> {
-    const membership = await MembershipRepository.findById(membershipId);
-    if (!membership) {
-      throw new Error('Membership not found');
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Укажите положительное целое количество дней или занятий.');
     }
-
-    if (membership.status !== 'active') {
-      throw new Error('Membership must be active to request extension');
+    if (typeof reason !== 'string' || reason.trim().length < 3 || reason.trim().length > 1000) {
+      throw new Error('Укажите причину продления (от 3 до 1000 символов).');
     }
-
-    if (requestedDays <= 0) {
-      throw new Error('Requested days must be positive');
-    }
-
-    const request = await MembershipRepository.requestExtension(membershipId, requestedDays, reason);
-    return request;
+    return MembershipRepository.requestExtension(membershipId, clientId, quantity, unit, reason);
   }
 
   static async getExtensionRequests(filters?: { status?: string; client_id?: string }): Promise<any[]> {
@@ -58,25 +52,12 @@ export class MembershipService {
     reviewedBy: string,
     adminComment?: string
   ): Promise<any> {
-    const request = await MembershipRepository.findExtensionRequests();
-    const targetRequest = request.find(r => r.id === requestId);
-    
-    if (!targetRequest) {
-      throw new Error('Extension request not found');
-    }
-
-    if (targetRequest.status !== 'pending') {
-      throw new Error('Request has already been processed');
-    }
-
-    const updated = await MembershipRepository.updateExtensionRequest(
+    return MembershipRepository.updateExtensionRequest(
       requestId,
       'approved',
       reviewedBy,
       adminComment
     );
-
-    return updated;
   }
 
   static async rejectExtensionRequest(
@@ -84,25 +65,12 @@ export class MembershipService {
     reviewedBy: string,
     adminComment?: string
   ): Promise<any> {
-    const request = await MembershipRepository.findExtensionRequests();
-    const targetRequest = request.find(r => r.id === requestId);
-    
-    if (!targetRequest) {
-      throw new Error('Extension request not found');
-    }
-
-    if (targetRequest.status !== 'pending') {
-      throw new Error('Request has already been processed');
-    }
-
-    const updated = await MembershipRepository.updateExtensionRequest(
+    return MembershipRepository.updateExtensionRequest(
       requestId,
       'rejected',
       reviewedBy,
       adminComment
     );
-
-    return updated;
   }
 
   static async cancelMembership(id: string): Promise<Membership> {

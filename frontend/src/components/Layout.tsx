@@ -9,7 +9,8 @@ import {
   CreditCard, 
   LogOut,
   User,
-  Bell
+  Bell,
+  Clock,
 } from 'lucide-react';
 
 const Layout = () => {
@@ -24,6 +25,7 @@ const Layout = () => {
     { path: '/trainers', icon: Users, label: 'Тренеры', roles: ['admin', 'trainer', 'client'] },
     { path: '/styles', icon: User, label: 'Стили танцев', roles: ['admin', 'trainer', 'client'] },
     { path: '/memberships', icon: CreditCard, label: 'Абонементы', roles: ['admin', 'client'] },
+    { path: '/membership-extension-requests', icon: Clock, label: 'Запросы на продление', roles: ['admin'] },
     { path: '/bookings', icon: Calendar, label: 'Бронирования', roles: ['client'] },
     { path: '/chat', icon: MessageSquare, label: 'Чат', roles: ['admin', 'trainer', 'client'] },
     { path: '/news', icon: Newspaper, label: 'Новости', roles: ['admin', 'trainer', 'client'] },

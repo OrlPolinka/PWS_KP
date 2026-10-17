@@ -17,6 +17,7 @@ import TrainerProfile from './pages/TrainerProfile';
 import Recommendations from './pages/Recommendations';
 import ScheduleDetails from './pages/ScheduleDetails';
 import DanceStyleDetails from './pages/DanceStyleDetails';
+import MembershipExtensionRequests from './pages/MembershipExtensionRequests';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -85,6 +86,7 @@ function App() {
             <Route path="styles" element={<DanceStyles />} />
             <Route path="styles/:id" element={<DanceStyleDetails />} />
             <Route path="memberships" element={<Memberships />} />
+            <Route path="membership-extension-requests" element={<RoleRoute role="admin"><MembershipExtensionRequests /></RoleRoute>} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="chat" element={<Chat />} />
             <Route path="news" element={<News />} />

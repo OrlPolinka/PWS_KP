@@ -83,6 +83,8 @@ Copy the `whsec_...` value printed by Stripe CLI into `STRIPE_WEBHOOK_SECRET`. T
 
 `PAYMENT_MODE` defaults to `mock` outside production and to `stripe` in production. The application refuses to start in production with `PAYMENT_MODE=mock`.
 
+Clients can request a membership extension within 10 days after expiry. Unlimited memberships request extra days; visit-limited memberships request extra classes and receive a fresh validity period when approved. Administrators review requests at `/membership-extension-requests`; approving or rejecting a request sends the client a notification. Apply `20261017_membership_extension_requests.sql` before using this feature on an existing database.
+
 3. Set up the database:
 ```bash
 # Create database
@@ -99,6 +101,7 @@ psql -U postgres -d dance_studio -f ../database/migrations/20261010_manage_dance
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_harden_news_notifications.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_prices_byn.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_stripe_payment_currency.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_extension_requests.sql
 ```
 The weekly migration preserves booked class dates while converting schedule entries to weekly slots (Monday = 1, Sunday = 7).
 

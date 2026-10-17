@@ -180,7 +180,10 @@ CREATE TABLE membership_extension_requests (
     membership_id   UUID NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
     client_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    requested_days  INTEGER NOT NULL CHECK (requested_days > 0),
+    requested_days  INTEGER CHECK (requested_days IS NULL OR requested_days > 0),
+    requested_visits INTEGER CHECK (requested_visits IS NULL OR requested_visits > 0),
+    requested_unit  VARCHAR(10) NOT NULL DEFAULT 'days'
+                    CHECK (requested_unit IN ('days', 'visits')),
     reason          TEXT,
 
     status          VARCHAR(20) NOT NULL DEFAULT 'pending'
@@ -189,11 +192,19 @@ CREATE TABLE membership_extension_requests (
     reviewed_at     TIMESTAMP,
     admin_comment   TEXT,
 
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_extension_request_quantity CHECK (
+        (requested_unit = 'days' AND requested_days > 0 AND requested_visits IS NULL)
+        OR
+        (requested_unit = 'visits' AND requested_visits > 0 AND requested_days IS NULL)
+    )
 );
 
 CREATE INDEX idx_ext_req_status ON membership_extension_requests(status);
 CREATE INDEX idx_ext_req_client ON membership_extension_requests(client_id);
+CREATE INDEX idx_ext_req_membership_pending
+    ON membership_extension_requests(membership_id)
+    WHERE status = 'pending';
 
 
 CREATE TABLE bookings (
@@ -472,7 +483,18 @@ BEGIN
             CASE WHEN NEW.status = 'approved'
                  THEN 'Продление одобрено'
                  ELSE 'Продление отклонено' END,
-            COALESCE(NEW.admin_comment, ''),
+            CASE
+              WHEN NEW.status = 'approved' AND NEW.requested_unit = 'visits'
+                THEN 'К абонементу добавлено занятий: ' || NEW.requested_visits || '.'
+              WHEN NEW.status = 'approved'
+                THEN 'К абонементу добавлено дней: ' || NEW.requested_days || '.'
+              ELSE 'Запрос на продление абонемента отклонён.'
+            END ||
+            CASE
+              WHEN NEW.admin_comment IS NOT NULL AND NEW.admin_comment <> ''
+                THEN ' Комментарий администратора: ' || NEW.admin_comment
+              ELSE ''
+            END,
             jsonb_build_object('requestId', NEW.id, 'membershipId', NEW.membership_id)
         );
     END IF;

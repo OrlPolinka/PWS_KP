@@ -77,6 +77,11 @@ export interface Membership {
   remaining_visits?: number;
   status: 'active' | 'expired' | 'paused' | 'pending_extension' | 'cancelled';
   price_paid: number;
+  membership_type_name?: string;
+  membership_visit_count?: number | null;
+  membership_duration_days?: number;
+  extension_request_status?: 'pending' | 'approved' | 'rejected' | null;
+  display_status?: 'active' | 'expired' | 'pending_extension' | 'paused' | 'cancelled';
   paused_at?: Date;
   paused_until?: Date;
 }

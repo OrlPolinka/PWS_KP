@@ -131,6 +131,10 @@ export interface Membership {
   created_at: string;
   updated_at: string;
   membership_type?: MembershipType;
+  membership_visit_count?: number | null;
+  membership_duration_days?: number;
+  extension_request_status?: 'pending' | 'approved' | 'rejected' | null;
+  display_status?: 'active' | 'expired' | 'pending_extension' | 'paused' | 'cancelled';
 }
 
 export interface Booking {

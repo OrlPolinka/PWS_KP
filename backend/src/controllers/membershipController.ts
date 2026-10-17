@@ -34,10 +34,15 @@ export class MembershipController {
   static async requestExtension(req: Request, res: Response) {
     try {
       const { membership_id } = req.params;
-      const { requested_days, reason } = req.body;
+      const { requested_quantity, requested_unit, reason } = req.body;
+      if (requested_unit !== 'days' && requested_unit !== 'visits') {
+        throw new Error('Укажите количество дней или занятий.');
+      }
       const request = await MembershipService.requestMembershipExtension(
         membership_id,
-        requested_days,
+        req.user!.userId,
+        Number(requested_quantity),
+        requested_unit,
         reason
       );
       

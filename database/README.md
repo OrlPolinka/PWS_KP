@@ -22,6 +22,7 @@ psql -U postgres -d dance_studio -f migrations/20261010_harden_news_notification
 psql -U postgres -d dance_studio -f migrations/20261010_booking_rules.sql
 psql -U postgres -d dance_studio -f migrations/20261017_membership_prices_byn.sql
 psql -U postgres -d dance_studio -f migrations/20261017_stripe_payment_currency.sql
+psql -U postgres -d dance_studio -f migrations/20261017_membership_extension_requests.sql
 ```
 
 ## Schema

@@ -67,17 +67,45 @@ export class MembershipRepository {
 
   static async findByClientId(clientId: string, filters?: { status?: string }): Promise<Membership[]> {
     let queryText = `
-            SELECT m.*, mt.name as membership_type_name, mt.price as original_price,
-              mt.dance_style_id AS membership_dance_style_id
+      SELECT m.*, mt.name AS membership_type_name, mt.price AS original_price,
+             mt.visit_count AS membership_visit_count,
+             mt.duration_days AS membership_duration_days,
+             extension.status AS extension_request_status,
+             CASE
+               WHEN m.end_date < CURRENT_DATE AND extension.status = 'pending' THEN 'pending_extension'
+               WHEN m.end_date < CURRENT_DATE THEN 'expired'
+               ELSE m.status
+             END AS display_status
       FROM memberships m
       JOIN membership_types mt ON mt.id = m.membership_type_id
+      LEFT JOIN LATERAL (
+        SELECT mer.status
+        FROM membership_extension_requests mer
+        WHERE mer.membership_id = m.id
+        ORDER BY mer.created_at DESC
+        LIMIT 1
+      ) extension ON TRUE
       WHERE m.client_id = $1
+        AND m.status <> 'cancelled'
+        AND (
+          m.end_date >= CURRENT_DATE
+          OR (
+            m.end_date >= CURRENT_DATE - INTERVAL '10 days'
+            AND COALESCE(extension.status, '') <> 'rejected'
+          )
+        )
     `;
     const params: any[] = [clientId];
     let paramIndex = 2;
 
     if (filters?.status) {
-      queryText += ` AND m.status = $${paramIndex}`;
+      queryText += ` AND (
+        CASE
+          WHEN m.end_date < CURRENT_DATE AND extension.status = 'pending' THEN 'pending_extension'
+          WHEN m.end_date < CURRENT_DATE THEN 'expired'
+          ELSE m.status
+        END
+      ) = $${paramIndex}`;
       params.push(filters.status);
       paramIndex++;
     }
@@ -128,22 +156,87 @@ export class MembershipRepository {
     return result.rows[0] || null;
   }
 
-  static async requestExtension(id: string, requestedDays: number, reason?: string): Promise<any> {
-    const membership = await this.findById(id);
-    if (!membership) return null;
+  static async requestExtension(
+    membershipId: string,
+    clientId: string,
+    quantity: number,
+    unit: 'days' | 'visits',
+    reason: string
+  ): Promise<any> {
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const membershipResult = await client.query(
+        `SELECT m.id, m.client_id, m.end_date, m.status, mt.visit_count,
+                (m.end_date < CURRENT_DATE
+                 AND m.end_date >= CURRENT_DATE - INTERVAL '10 days'
+                 AND m.status <> 'cancelled') AS extension_open
+         FROM memberships m
+         JOIN membership_types mt ON mt.id = m.membership_type_id
+         WHERE m.id = $1 AND m.client_id = $2
+         FOR UPDATE OF m`,
+        [membershipId, clientId]
+      );
+      const membership = membershipResult.rows[0];
+      if (!membership) throw new Error('Абонемент не найден.');
+      if (!membership.extension_open) {
+        throw new Error('Запрос можно отправить только в течение 10 дней после окончания абонемента.');
+      }
 
-    const result = await query(
-      `INSERT INTO membership_extension_requests (membership_id, client_id, requested_days, reason)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [id, membership.client_id, requestedDays, reason]
-    );
-    return result.rows[0];
+      const expectedUnit = membership.visit_count === null ? 'days' : 'visits';
+      if (unit !== expectedUnit) {
+        throw new Error(unit === 'days'
+          ? 'Для этого абонемента нужно указать количество занятий.'
+          : 'Для этого абонемента нужно указать количество дней.');
+      }
+
+      const pendingResult = await client.query(
+        `SELECT id FROM membership_extension_requests
+         WHERE membership_id = $1 AND status = 'pending'
+         LIMIT 1`,
+        [membershipId]
+      );
+      if (pendingResult.rowCount) throw new Error('Запрос на продление уже ожидает рассмотрения.');
+      const rejectedResult = await client.query(
+        `SELECT id FROM membership_extension_requests
+         WHERE membership_id = $1 AND status = 'rejected'
+         LIMIT 1`,
+        [membershipId]
+      );
+      if (rejectedResult.rowCount) {
+        throw new Error('После отклонения запроса продлить этот абонемент нельзя.');
+      }
+
+      const result = await client.query(
+        `INSERT INTO membership_extension_requests (
+           membership_id, client_id, requested_days, requested_visits, requested_unit, reason
+         )
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [
+          membershipId,
+          clientId,
+          unit === 'days' ? quantity : null,
+          unit === 'visits' ? quantity : null,
+          unit,
+          reason.trim(),
+        ]
+      );
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   static async findExtensionRequests(filters?: { status?: string; client_id?: string }): Promise<any[]> {
     let queryText = `
-      SELECT mer.*, m.client_id, u.full_name as client_name, mt.name as membership_type_name
+      SELECT mer.*, m.client_id, m.end_date, m.remaining_visits,
+             u.full_name AS client_name, mt.name AS membership_type_name,
+             mt.duration_days AS membership_duration_days
       FROM membership_extension_requests mer
       JOIN memberships m ON m.id = mer.membership_id
       JOIN users u ON u.id = m.client_id
@@ -165,34 +258,81 @@ export class MembershipRepository {
       paramIndex++;
     }
 
+    queryText += ` AND (
+      mer.status <> 'pending'
+      OR (
+        m.end_date < CURRENT_DATE
+        AND m.end_date >= CURRENT_DATE - INTERVAL '10 days'
+        AND m.status <> 'cancelled'
+      )
+    )`;
     queryText += ' ORDER BY mer.created_at DESC';
     const result = await query(queryText, params);
     return result.rows;
   }
 
-  static async updateExtensionRequest(requestId: string, status: string, reviewedBy: string, adminComment?: string): Promise<any> {
+  static async updateExtensionRequest(
+    requestId: string,
+    status: 'approved' | 'rejected',
+    reviewedBy: string,
+    adminComment?: string
+  ): Promise<any> {
     const client = await getTransactionClient();
     try {
       await client.query('BEGIN');
+
+      const requestResult = await client.query(
+        `SELECT mer.*, m.end_date, m.status AS membership_status, mt.duration_days
+         FROM membership_extension_requests mer
+         JOIN memberships m ON m.id = mer.membership_id
+         JOIN membership_types mt ON mt.id = m.membership_type_id
+         WHERE mer.id = $1
+         FOR UPDATE OF mer, m`,
+        [requestId]
+      );
+      const request = requestResult.rows[0];
+      if (!request) throw new Error('Запрос на продление не найден.');
+      if (request.status !== 'pending') throw new Error('Запрос уже рассмотрен.');
+
+      if (status === 'approved') {
+        const eligibleResult = await client.query(
+          `SELECT (end_date < CURRENT_DATE
+                   AND end_date >= CURRENT_DATE - INTERVAL '10 days'
+                   AND status <> 'cancelled') AS eligible
+           FROM memberships WHERE id = $1`,
+          [request.membership_id]
+        );
+        if (!eligibleResult.rows[0]?.eligible) {
+          throw new Error('Срок для продления этого абонемента истёк.');
+        }
+
+        if (request.requested_unit === 'visits') {
+          await client.query(
+            `UPDATE memberships
+             SET remaining_visits = COALESCE(remaining_visits, 0) + $1,
+                 end_date = GREATEST(end_date, CURRENT_DATE) + $2::integer,
+                 status = 'active'
+             WHERE id = $3`,
+            [request.requested_visits, request.duration_days, request.membership_id]
+          );
+        } else {
+          await client.query(
+            `UPDATE memberships
+             SET end_date = GREATEST(end_date, CURRENT_DATE) + $1::integer,
+                 status = 'active'
+             WHERE id = $2`,
+            [request.requested_days, request.membership_id]
+          );
+        }
+      }
 
       const result = await client.query(
         `UPDATE membership_extension_requests
          SET status = $1, reviewed_by = $2, reviewed_at = NOW(), admin_comment = $3
          WHERE id = $4
          RETURNING *`,
-        [status, reviewedBy, adminComment, requestId]
+        [status, reviewedBy, adminComment || null, requestId]
       );
-
-      if (status === 'approved') {
-        const request = result.rows[0];
-        await client.query(
-          `UPDATE memberships
-           SET end_date = end_date + INTERVAL '1 day' * $1, status = 'active'
-           WHERE id = $2`,
-          [request.requested_days, request.membership_id]
-        );
-      }
-
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {

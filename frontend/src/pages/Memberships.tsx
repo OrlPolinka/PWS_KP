@@ -57,6 +57,11 @@ const MembershipsPage = () => {
   const [testZipCode, setTestZipCode] = useState('');
   const [testPaymentError, setTestPaymentError] = useState('');
   const [testPaymentLoading, setTestPaymentLoading] = useState(false);
+  const [extensionTarget, setExtensionTarget] = useState<Membership | null>(null);
+  const [extensionQuantity, setExtensionQuantity] = useState('');
+  const [extensionReason, setExtensionReason] = useState('');
+  const [extensionError, setExtensionError] = useState('');
+  const [extensionSubmitting, setExtensionSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -240,6 +245,30 @@ const MembershipsPage = () => {
     }
   };
 
+  const submitExtensionRequest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!extensionTarget) return;
+    setExtensionSubmitting(true);
+    setExtensionError('');
+    try {
+      const isVisits = extensionTarget.membership_visit_count != null;
+      await api.post(`/memberships/${encodeURIComponent(extensionTarget.id)}/extension`, {
+        requested_quantity: Number(extensionQuantity),
+        requested_unit: isVisits ? 'visits' : 'days',
+        reason: extensionReason,
+      });
+      setExtensionTarget(null);
+      setExtensionQuantity('');
+      setExtensionReason('');
+      setPaymentNotice('Запрос на продление отправлен администратору.');
+      await fetchData();
+    } catch (requestError: unknown) {
+      setExtensionError(getPaymentError(requestError, 'Не удалось отправить запрос.'));
+    } finally {
+      setExtensionSubmitting(false);
+    }
+  };
+
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
@@ -304,8 +333,9 @@ const MembershipsPage = () => {
     const startDate = membership.start_date.slice(0, 10);
     const endDate = membership.end_date.slice(0, 10);
     const remainingVisits = membership.remaining_visits;
+    const status = membership.display_status || membership.status;
     return (!myMembershipSearch || searchText.includes(myMembershipSearch.toLocaleLowerCase('ru'))) &&
-      (!myMembershipStatus || membership.status === myMembershipStatus) &&
+      (!myMembershipStatus || status === myMembershipStatus) &&
       (!myMembershipDateFrom || endDate >= myMembershipDateFrom) &&
       (!myMembershipDateTo || startDate <= myMembershipDateTo) &&
       (!visitsFrom || (remainingVisits !== null && remainingVisits >= Number(visitsFrom))) &&
@@ -430,6 +460,58 @@ const MembershipsPage = () => {
         </div>
       )}
 
+      {extensionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="card w-full max-w-lg" aria-labelledby="extension-form-title" aria-modal="true" role="dialog">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="extension-form-title" className="text-xl font-bold">Запросить продление</h2>
+                <p className="mt-1 text-sm text-textSecondary">
+                  {extensionTarget.membership_type_name || extensionTarget.membership_type?.name}
+                </p>
+              </div>
+              <button type="button" onClick={() => setExtensionTarget(null)} className="rounded-lg p-2 hover:bg-surface2" aria-label="Закрыть">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={(event) => void submitExtensionRequest(event)} className="space-y-4">
+              <label className="block text-sm">
+                {extensionTarget.membership_visit_count != null ? 'Сколько занятий добавить' : 'На сколько дней продлить'}
+                <input
+                  required
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="input mt-1"
+                  value={extensionQuantity}
+                  onChange={(event) => setExtensionQuantity(event.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                Причина продления
+                <textarea
+                  required
+                  minLength={3}
+                  maxLength={1000}
+                  rows={4}
+                  className="input mt-1"
+                  value={extensionReason}
+                  onChange={(event) => setExtensionReason(event.target.value)}
+                  placeholder="Укажите причину запроса"
+                />
+              </label>
+              {extensionError && <p role="alert" className="text-sm text-error">{extensionError}</p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setExtensionTarget(null)} className="btn btn-secondary" disabled={extensionSubmitting}>Отмена</button>
+                <button type="submit" className="btn btn-primary" disabled={extensionSubmitting}>
+                  {extensionSubmitting ? 'Отправка...' : 'Отправить запрос'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       {formOpen && user?.role === 'admin' && <form onSubmit={saveType} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">{editingId ? 'Изменить тип' : 'Новый тип абонемента'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
         <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
@@ -461,12 +543,13 @@ const MembershipsPage = () => {
                     {membership.membership_type?.name || membership.membership_type_name || `Абонемент №${membership.membership_type_id}`}
                   </h3>
                   <span className={`px-3 py-1 rounded-full text-sm ${
-                    membership.status === 'active' ? 'bg-success/20 text-success' :
-                    membership.status === 'expired' ? 'bg-error/20 text-error' :
+                    (membership.display_status || membership.status) === 'active' ? 'bg-success/20 text-success' :
+                    (membership.display_status || membership.status) === 'expired' ? 'bg-error/20 text-error' :
                     'bg-warning/20 text-warning'
                   }`}>
-                    {membership.status === 'active' ? 'Активен' :
-                     membership.status === 'expired' ? 'Истек' : 'Отменен'}
+                    {(membership.display_status || membership.status) === 'active' ? 'Активен' :
+                     (membership.display_status || membership.status) === 'pending_extension' ? 'Ожидает решения' :
+                     (membership.display_status || membership.status) === 'expired' ? 'Истек' : 'Отменен'}
                   </span>
                 </div>
 
@@ -482,6 +565,22 @@ const MembershipsPage = () => {
                     </div>
                   )}
                 </div>
+                {user?.role === 'client' &&
+                  (membership.display_status || membership.status) === 'expired' &&
+                  membership.extension_request_status !== 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExtensionTarget(membership);
+                        setExtensionQuantity('');
+                        setExtensionReason('');
+                        setExtensionError('');
+                      }}
+                      className="btn btn-primary mt-4 w-full"
+                    >
+                      Продлить абонемент
+                    </button>
+                  )}
               </div>
             ))}
           </div>
