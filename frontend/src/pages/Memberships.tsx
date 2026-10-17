@@ -160,7 +160,7 @@ const MembershipsPage = () => {
       {formOpen && user?.role === 'admin' && <form onSubmit={saveType} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">{editingId ? 'Изменить тип' : 'Новый тип абонемента'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
         <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-        <label className="text-sm">Цена, ₽<input required type="number" min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
+        <label className="text-sm">Цена, BYN<input required type="number" min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
         <label className="text-sm">Длительность, дней<input required type="number" min={1} className="input mt-1" value={form.duration_days} onChange={(event) => setForm({ ...form, duration_days: event.target.value })} /></label>
         <label className="text-sm">Посещений<input type="number" min={1} placeholder="Без ограничений" className="input mt-1" value={form.visit_count} onChange={(event) => setForm({ ...form, visit_count: event.target.value })} /></label>
         <label className="text-sm sm:col-span-2">Описание<textarea rows={3} className="input mt-1" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
@@ -234,7 +234,7 @@ const MembershipsPage = () => {
                 </div>
                 <div className="min-w-0">
                   <h3 className="break-words text-xl font-bold">{type.name}</h3>
-                  <p className="text-2xl font-bold text-primary">{type.price} ₽</p>
+                  <p className="text-2xl font-bold text-primary">{type.price} BYN</p>
                 </div>
                 </div>
                 {user?.role === 'admin' && <div className="flex shrink-0 gap-1"><button onClick={() => openEdit(type)} title="Изменить" aria-label={`Изменить тип ${type.name}`} className="rounded-lg p-2 hover:bg-surface2"><Pencil size={16} /></button>{type.is_active ? <button onClick={() => setTypeActive(type, false)} title="Архивировать" aria-label={`Архивировать ${type.name}`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button> : <button onClick={() => setTypeActive(type, true)} className="text-sm text-primary hover:underline">Активировать</button>}</div>}

@@ -3,6 +3,19 @@ import { MessageService } from '../services';
 import { AppError } from '../middleware/errorHandler';
 
 export class MessageController {
+  static async getContacts(req: Request, res: Response) {
+    try {
+      const contacts = await MessageService.getContacts(
+        req.user!.userId,
+        typeof req.query.search === 'string' ? req.query.search : '',
+        typeof req.query.role === 'string' ? req.query.role : undefined
+      );
+      res.json(contacts);
+    } catch (error: any) {
+      throw new AppError(400, error.message);
+    }
+  }
+
   static async sendMessage(req: Request, res: Response) {
     try {
       const sender_id = req.user!.userId;
@@ -27,6 +40,15 @@ export class MessageController {
       const message = await MessageService.editMessage(parseInt(id), senderId, content);
       
       res.json(message);
+    } catch (error: any) {
+      throw new AppError(400, error.message);
+    }
+  }
+
+  static async deleteMessage(req: Request, res: Response) {
+    try {
+      await MessageService.deleteMessage(Number(req.params.id), req.user!.userId);
+      res.json({ message: 'Message deleted successfully' });
     } catch (error: any) {
       throw new AppError(400, error.message);
     }

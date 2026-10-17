@@ -157,6 +157,7 @@ export interface Message {
   receiver_id: string;
   content: string;
   is_read: boolean;
+  edited: boolean;
   created_at: string;
   updated_at: string;
   sender?: User;

@@ -20,7 +20,7 @@ app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: 'Too many requests from this IP, please try again later.',
+  message: { error: 'Превышен лимит запросов. Подождите 15 минут и попробуйте снова.' },
 });
 app.use('/api/', limiter);
 

@@ -788,12 +788,12 @@ WHERE date < CURRENT_DATE AND status = 'scheduled';
 -- 6. MEMBERSHIP_TYPES
 -- ============================================================
 INSERT INTO membership_types (id, name, description, price, visit_count, duration_days, is_active) VALUES
-    (1, 'Пробное занятие',      'Одно занятие для знакомства',                    35.00,  1,   7,  TRUE),
-    (2, '5 занятий',            '5 групповых занятий, срок 30 дней',             120.00,  5,  30,  TRUE),
-    (3, '10 занятий',           '10 групповых занятий, срок 60 дней',            200.00, 10,  60,  TRUE),
-    (4, '20 занятий',           '20 групповых занятий, срок 90 дней',            350.00, 20,  90,  TRUE),
-    (5, 'Безлимит на месяц',    'Неограниченное число занятий, срок 30 дней',    400.00, NULL, 30, TRUE),
-    (6, 'Персональная тренировка', 'Индивидуальное занятие с тренером',          80.00,  1,   7,  TRUE);
+    (1, 'Пробное занятие',      'Одно занятие для знакомства',                     5.00,  1,   7,  TRUE),
+    (2, '5 занятий',            '5 групповых занятий, срок 30 дней',             100.00,  5,  30,  TRUE),
+    (3, '10 занятий',           '10 групповых занятий, срок 60 дней',            190.00, 10,  60,  TRUE),
+    (4, '20 занятий',           '20 групповых занятий, срок 90 дней',            285.00, 20,  90,  TRUE),
+    (5, 'Безлимит на месяц',    'Неограниченное число занятий, срок 30 дней',    350.00, NULL, 30, TRUE),
+    (6, 'Персональная тренировка', 'Индивидуальное занятие с тренером',          45.00,  1,   7,  TRUE);
 
 SELECT setval('membership_types_id_seq', (SELECT MAX(id) FROM membership_types));
 
@@ -801,26 +801,26 @@ SELECT setval('membership_types_id_seq', (SELECT MAX(id) FROM membership_types))
 -- 7. PAYMENTS (успешные, один pending)
 -- ============================================================
 INSERT INTO payments (id, user_id, amount, status, provider, provider_payment_id, description, metadata, created_at) VALUES
-    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc1', '33333333-3333-4333-8333-333333333331', 120.00, 'succeeded', 'stripe', 'pi_test_001', 'Оплата абонемента «5 занятий»',  '{"card_last4":"4242","card_brand":"visa"}'::jsonb, NOW() - INTERVAL '20 days'),
-    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc2', '33333333-3333-4333-8333-333333333331', 400.00, 'succeeded', 'stripe', 'pi_test_002', 'Оплата безлимита на месяц',     '{"card_last4":"4242","card_brand":"visa"}'::jsonb, NOW() - INTERVAL '5 days'),
-    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc3', '33333333-3333-4333-8333-333333333332', 200.00, 'succeeded', 'stripe', 'pi_test_003', 'Оплата абонемента «10 занятий»', '{"card_last4":"5555","card_brand":"mastercard"}'::jsonb, NOW() - INTERVAL '10 days'),
-    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc4', '33333333-3333-4333-8333-333333333333', 120.00, 'succeeded', 'stripe', 'pi_test_004', 'Оплата абонемента «5 занятий»',  '{}'::jsonb, NOW() - INTERVAL '8 days'),
-    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc5', '33333333-3333-4333-8333-333333333334', 350.00, 'pending',   'stripe', 'pi_test_005', 'Оплата абонемента «20 занятий»', '{}'::jsonb, NOW() - INTERVAL '1 hour');
+    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc1', '33333333-3333-4333-8333-333333333331', 100.00, 'succeeded', 'stripe', 'pi_test_001', 'Оплата абонемента «5 занятий»',  '{"card_last4":"4242","card_brand":"visa"}'::jsonb, NOW() - INTERVAL '20 days'),
+    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc2', '33333333-3333-4333-8333-333333333331', 350.00, 'succeeded', 'stripe', 'pi_test_002', 'Оплата безлимита на месяц',     '{"card_last4":"4242","card_brand":"visa"}'::jsonb, NOW() - INTERVAL '5 days'),
+    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc3', '33333333-3333-4333-8333-333333333332', 190.00, 'succeeded', 'stripe', 'pi_test_003', 'Оплата абонемента «10 занятий»', '{"card_last4":"5555","card_brand":"mastercard"}'::jsonb, NOW() - INTERVAL '10 days'),
+    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc4', '33333333-3333-4333-8333-333333333333', 100.00, 'succeeded', 'stripe', 'pi_test_004', 'Оплата абонемента «5 занятий»',  '{}'::jsonb, NOW() - INTERVAL '8 days'),
+    ('cccccccc-cccc-4ccc-8ccc-ccccccccccc5', '33333333-3333-4333-8333-333333333334', 285.00, 'pending',   'stripe', 'pi_test_005', 'Оплата абонемента «20 занятий»', '{}'::jsonb, NOW() - INTERVAL '1 hour');
 
 -- ============================================================
 -- 8. MEMBERSHIPS
 -- ============================================================
 INSERT INTO memberships (id, client_id, membership_type_id, payment_id, purchase_date, start_date, end_date, remaining_visits, status, price_paid) VALUES
     -- Вероника: старый абонемент (5 занятий, почти закончился)
-    ('dddddddd-dddd-4ddd-8ddd-ddddddddd001', '33333333-3333-4333-8333-333333333331', 2, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1', NOW() - INTERVAL '20 days', CURRENT_DATE - 20, CURRENT_DATE + 10, 2, 'active', 120.00),
+    ('dddddddd-dddd-4ddd-8ddd-ddddddddd001', '33333333-3333-4333-8333-333333333331', 2, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1', NOW() - INTERVAL '20 days', CURRENT_DATE - 20, CURRENT_DATE + 10, 2, 'active', 100.00),
     -- Вероника: новый безлимит
-    ('dddddddd-dddd-4ddd-8ddd-ddddddddd002', '33333333-3333-4333-8333-333333333331', 5, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2', NOW() - INTERVAL '5 days',  CURRENT_DATE - 5,  CURRENT_DATE + 25, NULL, 'active', 400.00),
+    ('dddddddd-dddd-4ddd-8ddd-ddddddddd002', '33333333-3333-4333-8333-333333333331', 5, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2', NOW() - INTERVAL '5 days',  CURRENT_DATE - 5,  CURRENT_DATE + 25, NULL, 'active', 350.00),
     -- Иван: 10 занятий
-    ('dddddddd-dddd-4ddd-8ddd-ddddddddd003', '33333333-3333-4333-8333-333333333332', 3, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3', NOW() - INTERVAL '10 days', CURRENT_DATE - 10, CURRENT_DATE + 50, 7, 'active', 200.00),
+    ('dddddddd-dddd-4ddd-8ddd-ddddddddd003', '33333333-3333-4333-8333-333333333332', 3, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3', NOW() - INTERVAL '10 days', CURRENT_DATE - 10, CURRENT_DATE + 50, 7, 'active', 190.00),
     -- Мария: 5 занятий
-    ('dddddddd-dddd-4ddd-8ddd-ddddddddd004', '33333333-3333-4333-8333-333333333333', 2, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc4', NOW() - INTERVAL '8 days',  CURRENT_DATE - 8,  CURRENT_DATE + 22, 3, 'active', 120.00),
+    ('dddddddd-dddd-4ddd-8ddd-ddddddddd004', '33333333-3333-4333-8333-333333333333', 2, 'cccccccc-cccc-4ccc-8ccc-ccccccccccc4', NOW() - INTERVAL '8 days',  CURRENT_DATE - 8,  CURRENT_DATE + 22, 3, 'active', 100.00),
     -- Павел: безлимит, но истёк
-    ('dddddddd-dddd-4ddd-8ddd-ddddddddd005', '33333333-3333-4333-8333-333333333334', 5, NULL,                                  NOW() - INTERVAL '60 days', CURRENT_DATE - 60, CURRENT_DATE - 30, NULL, 'expired', 400.00);
+    ('dddddddd-dddd-4ddd-8ddd-ddddddddd005', '33333333-3333-4333-8333-333333333334', 5, NULL,                                  NOW() - INTERVAL '60 days', CURRENT_DATE - 60, CURRENT_DATE - 30, NULL, 'expired', 350.00);
 
 -- ============================================================
 -- 9. MEMBERSHIP_EXTENSION_REQUESTS
@@ -891,4 +891,3 @@ INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at) VALU
     -- Мария ↔ Екатерина
     ('33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222223', 'Извините, я не пришла на занятие. Можно перенести?',  TRUE,  NOW() - INTERVAL '3 days'),
     ('22222222-2222-4222-8222-222222222223', '33333333-3333-4333-8333-333333333333',
-

@@ -2,6 +2,15 @@ import { MessageRepository, UserRepository } from '../repositories';
 import { Message } from '../types';
 
 export class MessageService {
+  static async getContacts(userId: string, search = '', role?: string) {
+    const allowedRoles = ['admin', 'trainer', 'client'];
+    if (role && !allowedRoles.includes(role)) {
+      throw new Error('Invalid role filter');
+    }
+
+    return MessageRepository.getContacts(userId, search.trim().slice(0, 100), role);
+  }
+
   static async getMessageById(id: number): Promise<Message> {
     const message = await MessageRepository.findById(id);
     if (!message) {
@@ -37,6 +46,10 @@ export class MessageService {
       throw new Error('Message content cannot be empty');
     }
 
+    if (data.content.trim().length > 5000) {
+      throw new Error('Message cannot exceed 5000 characters');
+    }
+
     const message = await MessageRepository.create(data);
     return message;
   }
@@ -53,6 +66,10 @@ export class MessageService {
 
     if (!content || content.trim() === '') {
       throw new Error('Message content cannot be empty');
+    }
+
+    if (content.trim().length > 5000) {
+      throw new Error('Message cannot exceed 5000 characters');
     }
 
     const updated = await MessageRepository.update(id, { content });
@@ -119,5 +136,21 @@ export class MessageService {
     }
 
     return MessageRepository.getUnreadCount(userId);
+  }
+
+  static async deleteMessage(id: number, senderId: string): Promise<void> {
+    const message = await MessageRepository.findById(id);
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    if (message.sender_id !== senderId) {
+      throw new Error('Only sender can delete their own messages');
+    }
+
+    const deleted = await MessageRepository.delete(id, senderId);
+    if (!deleted) {
+      throw new Error('Failed to delete message');
+    }
   }
 }

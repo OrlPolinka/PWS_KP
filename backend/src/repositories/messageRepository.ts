@@ -2,6 +2,26 @@ import { query } from '../config/database';
 import { Message } from '../types';
 
 export class MessageRepository {
+  static async getContacts(userId: string, search: string, role?: string): Promise<Array<{
+    id: string;
+    full_name: string;
+    role: string;
+    photo_url?: string;
+  }>> {
+    const result = await query(
+      `SELECT id, full_name, role, photo_url
+       FROM users
+       WHERE id <> $1
+         AND is_active = true
+         AND full_name ILIKE $2
+         AND ($3::text IS NULL OR role = $3)
+       ORDER BY full_name
+       LIMIT 50`,
+      [userId, `%${search}%`, role || null]
+    );
+    return result.rows;
+  }
+
   static async findById(id: number): Promise<Message | null> {
     const result = await query(
       `SELECT m.*, 
@@ -88,17 +108,27 @@ export class MessageRepository {
         other_user.full_name,
         other_user.role,
         other_user.photo_url,
-              conversations.last_message_time,
-              last_message.content AS last_message
+        conversations.last_message_time,
+        last_message.content AS last_message,
+        last_message.is_read AS last_message_is_read,
+        last_message.sender_id AS last_message_sender_id,
+        COALESCE(unread.unread_count, 0)::int AS unread_count
        FROM conversation_list conversations
        JOIN users other_user ON other_user.id = conversations.other_user_id
        LEFT JOIN LATERAL (
-         SELECT content FROM messages
+         SELECT content, is_read, sender_id FROM messages
          WHERE (sender_id = $1 AND receiver_id = conversations.other_user_id)
             OR (sender_id = conversations.other_user_id AND receiver_id = $1)
          ORDER BY created_at DESC
          LIMIT 1
        ) last_message ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS unread_count
+         FROM messages
+         WHERE sender_id = conversations.other_user_id
+           AND receiver_id = $1
+           AND is_read = false
+       ) unread ON TRUE
        ORDER BY conversations.last_message_time DESC`,
       [userId]
     );
@@ -124,5 +154,13 @@ export class MessageRepository {
        WHERE sender_id = $2 AND receiver_id = $1 AND is_read = false`,
       [userId1, userId2]
     );
+  }
+
+  static async delete(id: number, senderId: string): Promise<boolean> {
+    const result = await query(
+      'DELETE FROM messages WHERE id = $1 AND sender_id = $2',
+      [id, senderId]
+    );
+    return (result.rowCount || 0) > 0;
   }
 }

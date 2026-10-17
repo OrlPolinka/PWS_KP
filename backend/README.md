@@ -77,6 +77,7 @@ For an existing installation, apply the migrations in this order:
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_weekly_schedule.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_manage_dance_styles.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_harden_news_notifications.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_prices_byn.sql
 ```
 The weekly migration preserves booked class dates while converting schedule entries to weekly slots (Monday = 1, Sunday = 7).
 
