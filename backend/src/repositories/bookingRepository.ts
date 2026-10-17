@@ -163,7 +163,8 @@ export class BookingRepository {
 
   static async findByClientId(clientId: string, filters?: { status?: string }): Promise<Booking[]> {
     let queryText = `
-      SELECT b.*, b.class_date, s.day_of_week, s.start_time, s.end_time, ds.name as dance_style_name,
+      SELECT b.*, TO_CHAR(b.class_date, 'YYYY-MM-DD') AS class_date,
+             s.day_of_week, s.start_time, s.end_time, ds.name as dance_style_name,
              h.name as hall_name, t.user_id as trainer_user_id, tu.full_name as trainer_name
       FROM bookings b
       JOIN schedule s ON s.id = b.schedule_id
@@ -190,7 +191,7 @@ export class BookingRepository {
   static async findByScheduleId(scheduleId: string): Promise<Booking[]> {
     const result = await query(
       `SELECT b.*, u.full_name as client_name, u.phone as client_phone,
-              u.client_code, u.qr_token as client_qr_token
+              u.client_code
        FROM bookings b
        JOIN users u ON u.id = b.client_id
        WHERE b.schedule_id = $1 AND b.status = 'booked'
@@ -198,6 +199,98 @@ export class BookingRepository {
       [scheduleId]
     );
     return result.rows;
+  }
+
+  static async findAttendanceRoster(scheduleId: string, classDate: string, trainerUserId: string): Promise<any[]> {
+    const result = await query(
+      `SELECT b.id AS booking_id, b.status AS booking_status, b.checked_in_at,
+              u.id AS client_id, u.full_name AS client_name, u.phone AS client_phone,
+              u.client_code, m.remaining_visits, mt.name AS membership_name,
+              a.is_present, a.marked_at
+       FROM schedule s
+       JOIN trainers t ON t.id = s.trainer_id AND t.user_id = $3
+       JOIN bookings b ON b.schedule_id = s.id AND b.class_date = $2::date
+       JOIN users u ON u.id = b.client_id
+       JOIN memberships m ON m.id = b.membership_id
+       JOIN membership_types mt ON mt.id = m.membership_type_id
+       LEFT JOIN attendance a ON a.booking_id = b.id
+       WHERE s.id = $1 AND b.status IN ('booked', 'attended', 'no_show')
+       ORDER BY u.full_name`,
+      [scheduleId, classDate, trainerUserId]
+    );
+    return result.rows;
+  }
+
+  static async markAttendanceByIdentifier(
+    scheduleId: string,
+    classDate: string,
+    identifier: string,
+    trainerUserId: string,
+    isPresent: boolean
+  ): Promise<any> {
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const bookingResult = await client.query(
+        `SELECT b.id AS booking_id, b.status AS booking_status,
+                u.id AS client_id, u.full_name AS client_name, u.client_code,
+                m.remaining_visits, m.id AS membership_id,
+                t.id AS trainer_id, mt.name AS membership_name
+         FROM schedule s
+         JOIN trainers t ON t.id = s.trainer_id AND t.user_id = $4
+         JOIN bookings b ON b.schedule_id = s.id AND b.class_date = $2::date
+         JOIN users u ON u.id = b.client_id
+         JOIN memberships m ON m.id = b.membership_id
+         JOIN membership_types mt ON mt.id = m.membership_type_id
+         WHERE s.id = $1
+           AND (UPPER(u.client_code) = UPPER($3) OR u.qr_token::text = $3)
+         FOR UPDATE OF b`,
+        [scheduleId, classDate, identifier.trim(), trainerUserId]
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) {
+        throw new Error('На это занятие клиент с таким номером или QR-кодом не записан.');
+      }
+      if (booking.booking_status !== 'booked') {
+        throw new Error(booking.booking_status === 'attended'
+          ? 'Посещение этого клиента уже отмечено.'
+          : 'Для этого клиента уже отмечена неявка.');
+      }
+
+      await client.query(
+        `INSERT INTO attendance (booking_id, trainer_id, is_present)
+         VALUES ($1, $2, $3)`,
+        [booking.booking_id, booking.trainer_id, isPresent]
+      );
+      await client.query(
+        `UPDATE bookings
+         SET status = $1,
+             checked_in = $2,
+             checked_in_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+             checked_in_by = CASE WHEN $2 THEN $3::uuid ELSE NULL::uuid END
+         WHERE id = $4`,
+        [isPresent ? 'attended' : 'no_show', isPresent, booking.trainer_id, booking.booking_id]
+      );
+      const remainingVisits = isPresent && booking.remaining_visits !== null
+        ? Math.max(Number(booking.remaining_visits) - 1, 0)
+        : booking.remaining_visits;
+      await client.query('COMMIT');
+      return {
+        booking_id: booking.booking_id,
+        client_id: booking.client_id,
+        client_name: booking.client_name,
+        client_code: booking.client_code,
+        membership_name: booking.membership_name,
+        booking_status: isPresent ? 'attended' : 'no_show',
+        is_present: isPresent,
+        remaining_visits: remainingVisits,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   static async cancel(id: string, cancelledBy: string): Promise<Booking | null> {
@@ -212,14 +305,44 @@ export class BookingRepository {
   }
 
   static async checkIn(id: string, checkedInBy: string): Promise<Booking | null> {
-    const result = await query(
-      `UPDATE bookings
-       SET checked_in = true, checked_in_at = NOW(), checked_in_by = $1
-       WHERE id = $2
-       RETURNING *`,
-      [checkedInBy, id]
-    );
-    return result.rows[0] || null;
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const bookingResult = await client.query(
+        `SELECT b.id, b.status, b.checked_in, t.id AS trainer_id
+         FROM bookings b
+         JOIN schedule s ON s.id = b.schedule_id
+         JOIN trainers t ON t.id = s.trainer_id
+         WHERE b.id = $1 AND t.user_id = $2
+         FOR UPDATE OF b`,
+        [id, checkedInBy]
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) throw new Error('Booking not found or trainer is not assigned to this class');
+      if (booking.status !== 'booked' || booking.checked_in) {
+        throw new Error('Booking is not active or attendance is already marked');
+      }
+
+      await client.query(
+        `INSERT INTO attendance (booking_id, trainer_id, is_present)
+         VALUES ($1, $2, TRUE)`,
+        [id, booking.trainer_id]
+      );
+      const result = await client.query(
+        `UPDATE bookings
+         SET status = 'attended', checked_in = TRUE, checked_in_at = NOW(), checked_in_by = $1::uuid
+         WHERE id = $2
+         RETURNING *`,
+        [booking.trainer_id, id]
+      );
+      await client.query('COMMIT');
+      return result.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   static async findByClientAndSchedule(clientId: string, scheduleId: string, classDate: string): Promise<Booking | null> {

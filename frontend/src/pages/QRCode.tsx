@@ -4,6 +4,8 @@ import api from '../services/api';
 
 const QRCodePage = () => {
   const [qrCode, setQrCode] = useState<string>('');
+  const [clientCode, setClientCode] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -12,8 +14,10 @@ const QRCodePage = () => {
 
   const fetchQRCode = async () => {
     try {
-      const response = await api.get('/users/qr-code');
+      const response = await api.get<{ qr_code: string; client_code: string; full_name: string }>('/users/qr-code');
       setQrCode(response.data.qr_code);
+      setClientCode(response.data.client_code);
+      setFullName(response.data.full_name);
     } catch (error) {
       console.error('Error fetching QR code:', error);
     } finally {
@@ -39,6 +43,13 @@ const QRCodePage = () => {
       <h1 className="text-3xl font-bold mb-8 text-center">Ваш QR-код</h1>
 
       <div className="card">
+        {fullName && <h2 className="mb-4 text-center text-xl font-semibold">{fullName}</h2>}
+        {clientCode && (
+          <div className="mb-6 rounded-lg bg-surface2 p-4 text-center">
+            <p className="text-sm text-textSecondary">Ваш уникальный номер клиента</p>
+            <p className="mt-1 text-2xl font-bold tracking-wider text-primary">{clientCode}</p>
+          </div>
+        )}
         <div className="text-center mb-6">
           <div className="w-64 h-64 mx-auto bg-white rounded-lg p-4 flex items-center justify-center">
             {qrCode ? (

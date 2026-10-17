@@ -12,6 +12,8 @@ router.patch('/:id/check-in', authenticate, authorize('trainer'), BookingControl
 
 router.get('/client/:client_id', authenticate, authorize('admin'), BookingController.getClientBookings);
 router.get('/client/:client_id/history', authenticate, authorize('admin'), BookingController.getClientVisitHistory);
-router.get('/schedule/:schedule_id', authenticate, BookingController.getScheduleBookings);
+router.get('/schedule/:schedule_id/attendance', authenticate, authorize('trainer'), BookingController.getAttendanceRoster);
+router.post('/schedule/:schedule_id/attendance', authenticate, authorize('trainer'), BookingController.markAttendanceByIdentifier);
+router.get('/schedule/:schedule_id', authenticate, authorize('trainer'), BookingController.getScheduleBookings);
 
 export default router;

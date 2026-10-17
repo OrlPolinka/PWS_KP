@@ -568,6 +568,9 @@ BEGIN
     IF NEW.role = 'client' AND (NEW.client_code IS NULL OR NEW.client_code = '') THEN
         NEW.client_code := 'CL-' || LPAD(nextval('client_code_seq')::text, 6, '0');
     END IF;
+    IF NEW.role = 'client' AND NEW.qr_token IS NULL THEN
+        NEW.qr_token := gen_random_uuid();
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -575,6 +578,10 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_user_client_code
     BEFORE INSERT OR UPDATE OF role ON users
     FOR EACH ROW EXECUTE FUNCTION assign_client_code();
+
+UPDATE users
+SET role = role
+WHERE role = 'client' AND (client_code IS NULL OR qr_token IS NULL);
 
 -- ============================================================
 -- VIEW: история посещений клиента
@@ -688,6 +695,13 @@ UPDATE users SET client_code = 'CL-000002' WHERE id = '33333333-3333-4333-8333-3
 UPDATE users SET client_code = 'CL-000003' WHERE id = '33333333-3333-4333-8333-333333333333';
 UPDATE users SET client_code = 'CL-000004' WHERE id = '33333333-3333-4333-8333-333333333334';
 UPDATE users SET client_code = 'CL-000005' WHERE id = '33333333-3333-4333-8333-333333333335';
+SELECT setval(
+    'client_code_seq',
+    COALESCE(MAX(substring(client_code FROM 4)::BIGINT), 1),
+    MAX(substring(client_code FROM 4)::BIGINT) IS NOT NULL
+)
+FROM users
+WHERE client_code ~ '^CL-[0-9]+$';
 
 -- ============================================================
 -- 2. TRAINERS

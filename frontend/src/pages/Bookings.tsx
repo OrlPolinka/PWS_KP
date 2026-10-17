@@ -173,6 +173,10 @@ const BookingsPage = () => {
                           <MapPin size={14} />
                           <span>{booking.hall_name || booking.schedule?.hall?.name}</span>
                         </div>
+                        <div className="flex items-center space-x-1">
+                          <UserIcon size={14} />
+                          <span>{booking.trainer_name || 'Тренер не указан'}</span>
+                        </div>
                       </div>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-sm ${

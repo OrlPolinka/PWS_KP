@@ -34,9 +34,37 @@ export class BookingController {
   static async getScheduleBookings(req: Request, res: Response) {
     try {
       const { schedule_id } = req.params;
-      const bookings = await BookingService.getScheduleBookings(schedule_id);
+      const bookings = await BookingService.getScheduleBookings(schedule_id, req.user!.userId);
       
       res.json(bookings);
+    } catch (error: any) {
+      throw new AppError(400, error.message);
+    }
+  }
+
+  static async getAttendanceRoster(req: Request, res: Response) {
+    try {
+      const { schedule_id } = req.params;
+      const classDate = String(req.query.class_date || '');
+      const roster = await BookingService.getAttendanceRoster(schedule_id, classDate, req.user!.userId);
+      res.json(roster);
+    } catch (error: any) {
+      throw new AppError(400, error.message);
+    }
+  }
+
+  static async markAttendanceByIdentifier(req: Request, res: Response) {
+    try {
+      const { schedule_id } = req.params;
+      const { class_date, identifier, is_present } = req.body;
+      const result = await BookingService.markAttendanceByIdentifier(
+        schedule_id,
+        class_date,
+        identifier,
+        req.user!.userId,
+        is_present
+      );
+      res.json(result);
     } catch (error: any) {
       throw new AppError(400, error.message);
     }

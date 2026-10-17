@@ -109,8 +109,8 @@ export class UserController {
     try {
       const userId = req.user!.userId;
       const qrCode = await UserService.generateQRCode(userId);
-      
-      res.json({ qr_code: qrCode });
+      const user = await UserService.getUserById(userId);
+      res.json({ qr_code: qrCode, client_code: user.client_code, full_name: user.full_name });
     } catch (error: any) {
       throw new AppError(400, error.message);
     }

@@ -11,6 +11,8 @@ import {
   User,
   Bell,
   Clock,
+  ClipboardCheck,
+  QrCode,
 } from 'lucide-react';
 
 const Layout = () => {
@@ -26,6 +28,8 @@ const Layout = () => {
     { path: '/styles', icon: User, label: 'Стили танцев', roles: ['admin', 'trainer', 'client'] },
     { path: '/memberships', icon: CreditCard, label: 'Абонементы', roles: ['admin', 'client'] },
     { path: '/membership-extension-requests', icon: Clock, label: 'Запросы на продление', roles: ['admin'] },
+    { path: '/attendance', icon: ClipboardCheck, label: 'Посещаемость', roles: ['trainer'] },
+    { path: '/qr-code', icon: QrCode, label: 'Мой QR-код', roles: ['client'] },
     { path: '/bookings', icon: Calendar, label: 'Бронирования', roles: ['client'] },
     { path: '/chat', icon: MessageSquare, label: 'Чат', roles: ['admin', 'trainer', 'client'] },
     { path: '/news', icon: Newspaper, label: 'Новости', roles: ['admin', 'trainer', 'client'] },

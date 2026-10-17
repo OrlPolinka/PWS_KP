@@ -2,6 +2,7 @@ import { UserRepository } from '../repositories';
 import { User, UserRole } from '../types';
 import QRCode from 'qrcode';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 
 export class UserService {
   static async getUserById(id: string): Promise<User> {
@@ -111,9 +112,12 @@ export class UserService {
       throw new Error('User not found');
     }
 
-    // Generate QR token if it doesn't exist
+    if (user.role !== 'client') {
+      throw new Error('QR code is only available for clients');
+    }
+
     if (!user.qr_token) {
-      const qrToken = Math.floor(100000 + Math.random() * 900000).toString();
+      const qrToken = randomUUID();
       await UserRepository.update(userId, { qr_token: qrToken });
       user.qr_token = qrToken;
     }

@@ -18,6 +18,7 @@ import Recommendations from './pages/Recommendations';
 import ScheduleDetails from './pages/ScheduleDetails';
 import DanceStyleDetails from './pages/DanceStyleDetails';
 import MembershipExtensionRequests from './pages/MembershipExtensionRequests';
+import TrainerAttendance from './pages/TrainerAttendance';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -82,6 +83,7 @@ function App() {
             <Route path="trainers" element={<Trainers />} />
             <Route path="trainers/:id" element={<TrainerProfile />} />
             <Route path="my-profile" element={<RoleRoute role="trainer"><TrainerProfile /></RoleRoute>} />
+            <Route path="attendance" element={<RoleRoute role="trainer"><TrainerAttendance /></RoleRoute>} />
             <Route path="recommendations" element={<RoleRoute role="client"><Recommendations /></RoleRoute>} />
             <Route path="styles" element={<DanceStyles />} />
             <Route path="styles/:id" element={<DanceStyleDetails />} />

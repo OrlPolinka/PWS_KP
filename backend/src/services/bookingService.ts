@@ -1,4 +1,4 @@
-import { BookingRepository, ScheduleRepository, MembershipRepository, UserRepository } from '../repositories';
+import { BookingRepository, ScheduleRepository, MembershipRepository, TrainerRepository, UserRepository } from '../repositories';
 import { Booking } from '../types';
 
 export class BookingService {
@@ -23,13 +23,63 @@ export class BookingService {
     return BookingRepository.findByClientId(clientId, filters);
   }
 
-  static async getScheduleBookings(scheduleId: string): Promise<Booking[]> {
+  static async getScheduleBookings(scheduleId: string, trainerUserId: string): Promise<Booking[]> {
     const schedule = await ScheduleRepository.findById(scheduleId);
-    if (!schedule) {
-      throw new Error('Schedule not found');
+    const trainer = await TrainerRepository.findByUserId(trainerUserId);
+    if (!schedule || !trainer || schedule.trainer_id !== trainer.id) {
+      throw new Error('Можно просматривать записи только на собственное занятие.');
     }
 
     return BookingRepository.findByScheduleId(scheduleId);
+  }
+
+  static async getAttendanceRoster(scheduleId: string, classDate: string, trainerUserId: string): Promise<any[]> {
+    await this.validateTrainerScheduleDate(scheduleId, classDate, trainerUserId);
+    return BookingRepository.findAttendanceRoster(scheduleId, classDate, trainerUserId);
+  }
+
+  static async markAttendanceByIdentifier(
+    scheduleId: string,
+    classDate: string,
+    identifier: string,
+    trainerUserId: string,
+    isPresent: boolean
+  ): Promise<any> {
+    await this.validateTrainerScheduleDate(scheduleId, classDate, trainerUserId);
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new Error('Введите номер клиента или отсканируйте QR-код.');
+    }
+    if (typeof isPresent !== 'boolean') {
+      throw new Error('Выберите, отметить ли клиента как присутствующего.');
+    }
+    return BookingRepository.markAttendanceByIdentifier(
+      scheduleId,
+      classDate,
+      identifier.trim(),
+      trainerUserId,
+      isPresent
+    );
+  }
+
+  private static async validateTrainerScheduleDate(
+    scheduleId: string,
+    classDate: string,
+    trainerUserId: string
+  ): Promise<void> {
+    const schedule = await ScheduleRepository.findById(scheduleId);
+    const trainer = await TrainerRepository.findByUserId(trainerUserId);
+    if (!schedule || !trainer || schedule.trainer_id !== trainer.id) {
+      throw new Error('Можно отмечать посещаемость только на собственном занятии.');
+    }
+    const date = new Date(`${classDate}T00:00:00Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(classDate) ||
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== classDate ||
+      (date.getUTCDay() || 7) !== schedule.day_of_week
+    ) {
+      throw new Error('Дата не соответствует дню занятия.');
+    }
   }
 
   static async createBooking(data: {
