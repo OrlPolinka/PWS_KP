@@ -31,22 +31,6 @@ export class MembershipController {
     }
   }
 
-  static async purchaseMembership(req: Request, res: Response) {
-    try {
-      const client_id = req.user!.userId;
-      const { membership_type_id, payment_id } = req.body;
-      const membership = await MembershipService.purchaseMembership({
-        client_id,
-        membership_type_id,
-        payment_id,
-      });
-      
-      res.status(201).json(membership);
-    } catch (error: any) {
-      throw new AppError(400, error.message);
-    }
-  }
-
   static async requestExtension(req: Request, res: Response) {
     try {
       const { membership_id } = req.params;

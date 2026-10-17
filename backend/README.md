@@ -59,9 +59,29 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
 
+PAYMENT_MODE=mock
+FRONTEND_URL=http://localhost:5173
+
 PORT=3000
 NODE_ENV=development
 ```
+
+In development, payments use a local simulator by default. No Stripe account, API keys, or external payment request are needed. After clicking **Оплатить**, a card form opens. Enter `4242 4242 4242 4242` for a successful test payment or `4000 0000 0000 0002` to simulate a bank decline. The form also requires a future expiry date in `MM/YY` format, any three-digit CVC, and a postal code. Confirming the successful test card creates the membership and records a BYN payment; a declined card does not. This is only a local simulation and does not move money. Card details are checked in the browser and are not sent to or stored by the backend.
+
+To use Stripe Checkout instead, set `PAYMENT_MODE=stripe` and configure test keys:
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+The client catalog and membership price remain in BYN. Stripe checkout converts the price to USD using the National Bank of the Republic of Belarus exchange rate, and includes the original BYN price and rate date in the product description. Memberships are activated only after Stripe sends a verified successful-payment webhook.
+
+For local Stripe webhook testing, install the [Stripe CLI](https://docs.stripe.com/stripe-cli), then run:
+```bash
+stripe listen --forward-to localhost:3000/api/payments/stripe/webhook
+```
+Copy the `whsec_...` value printed by Stripe CLI into `STRIPE_WEBHOOK_SECRET`. The CLI listener must stay running while testing. Use Stripe's test Visa card `4242 4242 4242 4242`, any future expiry date, and any CVC. Test keys and test cards do not move real money.
+
+`PAYMENT_MODE` defaults to `mock` outside production and to `stripe` in production. The application refuses to start in production with `PAYMENT_MODE=mock`.
 
 3. Set up the database:
 ```bash
@@ -78,6 +98,7 @@ psql -U postgres -d dance_studio -f ../database/migrations/20261010_weekly_sched
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_manage_dance_styles.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_harden_news_notifications.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_prices_byn.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261017_stripe_payment_currency.sql
 ```
 The weekly migration preserves booked class dates while converting schedule entries to weekly slots (Monday = 1, Sunday = 7).
 
@@ -147,7 +168,6 @@ npm start
 
 ### Memberships
 - `GET /api/memberships/my` - Get my memberships (Client)
-- `POST /api/memberships/purchase` - Purchase membership (Client)
 - `POST /api/memberships/:membership_id/extension` - Request extension (Client)
 - `GET /api/memberships/extension-requests` - Get extension requests (Admin)
 - `PATCH /api/memberships/extension-requests/:id/approve` - Approve extension (Admin)
@@ -181,6 +201,11 @@ npm start
 - `PATCH /api/notifications/:id/read` - Mark as read
 - `PATCH /api/notifications/read-all` - Mark all as read
 - `GET /api/notifications/unread-count` - Get unread count
+
+### Payments
+- `POST /api/payments/checkout` - Create a Stripe Checkout session for an active membership type (Client)
+- `GET /api/payments/:id` - Check the current user's Stripe payment status (Client)
+- `POST /api/payments/stripe/webhook` - Receive Stripe payment notifications
 
 ## Role Permissions
 

@@ -1,4 +1,5 @@
 import { FormEvent, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CreditCard, Clock, CheckCircle, Plus, Pencil, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle, MembershipType, Membership } from '../types';
@@ -14,8 +15,17 @@ type MembershipTypeForm = {
 
 const emptyForm: MembershipTypeForm = { name: '', description: '', price: '', visit_count: '', duration_days: '30' };
 
+const getPaymentError = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response;
+    if (response?.data?.error) return response.data.error;
+  }
+  return fallback;
+};
+
 const MembershipsPage = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [myMemberships, setMyMemberships] = useState<Membership[]>([]);
   const [danceStyles, setDanceStyles] = useState<DanceStyle[]>([]);
@@ -38,10 +48,176 @@ const MembershipsPage = () => {
   const [durationTo, setDurationTo] = useState('');
   const [visitPolicy, setVisitPolicy] = useState('');
   const [typeStatus, setTypeStatus] = useState('active');
+  const [checkoutTypeId, setCheckoutTypeId] = useState<number | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState('');
+  const [testPaymentId, setTestPaymentId] = useState<string | null>(null);
+  const [testCardNumber, setTestCardNumber] = useState('');
+  const [testExpiryDate, setTestExpiryDate] = useState('');
+  const [testCvc, setTestCvc] = useState('');
+  const [testZipCode, setTestZipCode] = useState('');
+  const [testPaymentError, setTestPaymentError] = useState('');
+  const [testPaymentLoading, setTestPaymentLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, [user?.role]);
+
+  useEffect(() => {
+    const paymentId = searchParams.get('payment_id');
+    if (!paymentId) return;
+    const paymentMode = searchParams.get('payment_mode');
+
+    let cancelled = false;
+    if (searchParams.get('payment_result') === 'cancelled') {
+      setPaymentNotice('Оплата отменена. Абонемент не оформлен.');
+      setTestPaymentId(null);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    let attempts = 0;
+    if (paymentMode !== 'mock') setPaymentNotice('Проверяем статус оплаты...');
+
+    const checkPayment = async () => {
+      try {
+        const response = await api.get<{ status: string }>(`/payments/${encodeURIComponent(paymentId)}`);
+        if (cancelled) return;
+        if (paymentMode === 'mock') {
+          if (response.data.status === 'pending') {
+            setTestPaymentId(paymentId);
+            setPaymentNotice('');
+            return;
+          }
+          setTestPaymentId(null);
+          setPaymentNotice(response.data.status === 'succeeded'
+            ? 'Тестовая оплата завершена. Абонемент добавлен в ваш профиль.'
+            : 'Тестовая оплата отменена. Абонемент не оформлен.');
+          if (response.data.status === 'succeeded') await fetchData();
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        if (response.data.status === 'succeeded') {
+          setPaymentNotice('Оплата прошла успешно. Абонемент добавлен в ваш профиль.');
+          setTestPaymentId(null);
+          await fetchData();
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        if (response.data.status === 'failed') {
+          setPaymentNotice('Оплата не прошла. Попробуйте оформить покупку ещё раз.');
+          setTestPaymentId(null);
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        attempts += 1;
+        if (attempts < 20) {
+          window.setTimeout(() => void checkPayment(), 2000);
+        } else {
+          setPaymentNotice('Платёж ещё обрабатывается. Обновите страницу через несколько секунд.');
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setPaymentNotice(getPaymentError(error, 'Не удалось проверить статус оплаты.'));
+        }
+      }
+    };
+
+    void checkPayment();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams]);
+
+  const startCheckout = async (membershipTypeId: number) => {
+    setCheckoutTypeId(membershipTypeId);
+    setPaymentNotice('');
+    try {
+      const response = await api.post<{ mode: 'mock' | 'stripe'; payment_id: string; url?: string }>('/payments/checkout', {
+        membership_type_id: membershipTypeId,
+      });
+      if (response.data.mode === 'mock') {
+        setSearchParams({ payment_id: response.data.payment_id, payment_mode: 'mock' });
+      } else if (response.data.url) {
+        window.location.assign(response.data.url);
+      } else {
+        throw new Error('Stripe не вернул ссылку на оплату.');
+      }
+    } catch (error: unknown) {
+      setPaymentNotice(getPaymentError(error, 'Не удалось начать оплату.'));
+    } finally {
+      setCheckoutTypeId(null);
+    }
+  };
+
+  const finishTestPayment = async (outcome: 'complete' | 'cancel') => {
+    if (!testPaymentId) return;
+    setTestPaymentLoading(true);
+    setTestPaymentError('');
+    try {
+      await api.post(`/payments/${encodeURIComponent(testPaymentId)}/test/${outcome}`);
+      setTestPaymentId(null);
+      setTestCardNumber('');
+      setTestExpiryDate('');
+      setTestCvc('');
+      setTestZipCode('');
+      setSearchParams({}, { replace: true });
+      if (outcome === 'complete') {
+        setPaymentNotice('Тестовая оплата завершена. Абонемент добавлен в ваш профиль.');
+        await fetchData();
+      } else {
+        setPaymentNotice('Тестовая оплата отменена. Абонемент не оформлен.');
+      }
+    } catch (error: unknown) {
+      setTestPaymentError(getPaymentError(error, 'Не удалось завершить тестовую оплату.'));
+    } finally {
+      setTestPaymentLoading(false);
+    }
+  };
+
+  const submitTestPayment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTestPaymentError('');
+
+    const cardNumber = testCardNumber.replace(/\s/g, '');
+    if (!cardNumber || !testExpiryDate || !testCvc || !testZipCode.trim()) {
+      setTestPaymentError('Заполните все поля.');
+      return;
+    }
+
+    const expiryMatch = /^(\d{2})\/(\d{2})$/.exec(testExpiryDate);
+    if (!expiryMatch) {
+      setTestPaymentError('Введите дату в формате ММ/ГГ.');
+      return;
+    }
+    const expiryMonth = Number(expiryMatch[1]);
+    const expiryYear = 2000 + Number(expiryMatch[2]);
+    const now = new Date();
+    if (
+      expiryMonth < 1 ||
+      expiryMonth > 12 ||
+      expiryYear < now.getFullYear() ||
+      (expiryYear === now.getFullYear() && expiryMonth < now.getMonth() + 1)
+    ) {
+      setTestPaymentError('Срок действия карты истёк или указан неверно.');
+      return;
+    }
+
+    if (!/^\d{3}$/.test(testCvc)) {
+      setTestPaymentError('CVC должен состоять из 3 цифр.');
+      return;
+    }
+
+    if (cardNumber === '4000000000000002') {
+      setTestPaymentError('Карта отклонена банком.');
+      return;
+    }
+    if (cardNumber !== '4242424242424242') {
+      setTestPaymentError('Для теста используйте одну из указанных ниже карт.');
+      return;
+    }
+
+    setTestPaymentLoading(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    await finishTestPayment('complete');
+  };
 
   const fetchData = async () => {
     try {
@@ -157,6 +333,103 @@ const MembershipsPage = () => {
         {user?.role === 'admin' && <button onClick={openCreate} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить тип</button>}
       </div>
 
+      {paymentNotice && (
+        <p role="status" className="card mb-6 border-primary text-center">
+          {paymentNotice}
+        </p>
+      )}
+
+      {testPaymentId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="card max-h-[90vh] w-full max-w-lg overflow-y-auto" aria-labelledby="test-payment-title" aria-modal="true" role="dialog">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="test-payment-title" className="text-2xl font-bold">Оплата абонемента</h2>
+                <p className="mt-1 text-sm text-textSecondary">Тестовая оплата — деньги не списываются</p>
+              </div>
+              <button type="button" onClick={() => void finishTestPayment('cancel')} disabled={testPaymentLoading} className="rounded-lg px-3 py-1 text-textSecondary hover:bg-surface2 disabled:opacity-60" aria-label="Закрыть">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-5 rounded-lg bg-surface2 p-4">
+              <h3 className="mb-2 font-semibold">Тестовые карты</h3>
+              <p className="text-sm">Успешная оплата: <strong>4242 4242 4242 4242</strong></p>
+              <p className="mt-1 text-sm">Отказ банка: <strong>4000 0000 0000 0002</strong></p>
+              <p className="mt-2 text-xs text-textSecondary">Введите дату в будущем, например 12/34, любой трёхзначный CVC и индекс.</p>
+            </div>
+
+            <form onSubmit={(event) => void submitTestPayment(event)} className="space-y-4">
+              <label className="block text-sm">
+                Номер карты
+                <input
+                  required
+                  autoComplete="cc-number"
+                  inputMode="numeric"
+                  maxLength={19}
+                  placeholder="4242 4242 4242 4242"
+                  className="input mt-1"
+                  value={testCardNumber}
+                  onChange={(event) => setTestCardNumber(event.target.value.replace(/[^\d ]/g, '').slice(0, 19))}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block text-sm">
+                  Срок действия (ММ/ГГ)
+                  <input
+                    required
+                    autoComplete="cc-exp"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="12/34"
+                    className="input mt-1"
+                    value={testExpiryDate}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, '').slice(0, 4);
+                      setTestExpiryDate(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits);
+                    }}
+                  />
+                </label>
+                <label className="block text-sm">
+                  CVC
+                  <input
+                    required
+                    autoComplete="cc-csc"
+                    inputMode="numeric"
+                    maxLength={3}
+                    placeholder="123"
+                    className="input mt-1"
+                    value={testCvc}
+                    onChange={(event) => setTestCvc(event.target.value.replace(/\D/g, '').slice(0, 3))}
+                  />
+                </label>
+              </div>
+              <label className="block text-sm">
+                Почтовый индекс
+                <input
+                  required
+                  autoComplete="postal-code"
+                  maxLength={12}
+                  placeholder="220000"
+                  className="input mt-1"
+                  value={testZipCode}
+                  onChange={(event) => setTestZipCode(event.target.value)}
+                />
+              </label>
+              {testPaymentError && <p role="alert" className="text-sm text-error">{testPaymentError}</p>}
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
+                <button type="button" onClick={() => void finishTestPayment('cancel')} disabled={testPaymentLoading} className="btn btn-secondary disabled:opacity-60">
+                  Отмена
+                </button>
+                <button type="submit" disabled={testPaymentLoading} className="btn btn-primary disabled:opacity-60">
+                  {testPaymentLoading ? 'Обработка...' : 'Оплатить'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       {formOpen && user?.role === 'admin' && <form onSubmit={saveType} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">{editingId ? 'Изменить тип' : 'Новый тип абонемента'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
         <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
@@ -184,7 +457,9 @@ const MembershipsPage = () => {
             {visibleMyMemberships.length === 0 ? <p className="text-textSecondary">Абонементы по выбранным критериям не найдены</p> : visibleMyMemberships.map((membership) => (
               <div key={membership.id} className="card border-primary">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold">{membership.membership_type?.name}</h3>
+                  <h3 className="text-xl font-bold">
+                    {membership.membership_type?.name || membership.membership_type_name || `Абонемент №${membership.membership_type_id}`}
+                  </h3>
                   <span className={`px-3 py-1 rounded-full text-sm ${
                     membership.status === 'active' ? 'bg-success/20 text-success' :
                     membership.status === 'expired' ? 'bg-error/20 text-error' :
@@ -257,7 +532,15 @@ const MembershipsPage = () => {
                 </div>
               </div>
 
-              {user?.role === 'client' && type.is_active && <button className="btn btn-primary w-full">Купить</button>}
+              {user?.role === 'client' && type.is_active && (
+                <button
+                  onClick={() => void startCheckout(type.id)}
+                  disabled={checkoutTypeId !== null}
+                  className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {checkoutTypeId === type.id ? 'Подготовка оплаты...' : `Оплатить (${type.price} BYN)`}
+                </button>
+              )}
             </div>
           ))}
         </div>

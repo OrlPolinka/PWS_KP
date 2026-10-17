@@ -27,46 +27,6 @@ export class MembershipService {
     return MembershipRepository.findActiveByClientId(clientId);
   }
 
-  static async purchaseMembership(data: {
-    client_id: string;
-    membership_type_id: number;
-    payment_id?: string;
-  }): Promise<Membership> {
-    const user = await UserRepository.findById(data.client_id);
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    if (user.role !== 'client') {
-      throw new Error('User must be a client');
-    }
-
-    const membershipType = await MembershipTypeRepository.findById(data.membership_type_id);
-    if (!membershipType) {
-      throw new Error('Membership type not found');
-    }
-
-    if (!membershipType.is_active) {
-      throw new Error('Membership type is not active');
-    }
-
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + membershipType.duration_days);
-
-    const membership = await MembershipRepository.create({
-      client_id: data.client_id,
-      membership_type_id: data.membership_type_id,
-      payment_id: data.payment_id,
-      start_date: startDate,
-      end_date: endDate,
-      remaining_visits: membershipType.visit_count ?? null,
-      price_paid: membershipType.price,
-    });
-
-    return membership;
-  }
-
   static async requestMembershipExtension(
     membershipId: string,
     requestedDays: number,

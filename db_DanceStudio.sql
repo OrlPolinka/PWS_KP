@@ -131,11 +131,12 @@ CREATE TABLE payments (
     user_id             UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     amount              NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+    currency            VARCHAR(3) NOT NULL DEFAULT 'BYN',
 
     status              VARCHAR(20) NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'succeeded', 'failed', 'refunded')),
 
-    provider            VARCHAR(50),                       -- stripe, bepaid, etc.
+    provider            VARCHAR(50),                       -- payment provider
     provider_payment_id VARCHAR(255),
     description         TEXT,
     metadata            JSONB DEFAULT '{}'::jsonb,

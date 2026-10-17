@@ -10,3 +10,4 @@ export { MessageController } from './messageController';
 export { NewsController } from './newsController';
 export { NotificationController } from './notificationController';
 export { DanceStyleController } from './danceStyleController';
+export { PaymentController } from './paymentController';

@@ -11,6 +11,7 @@ import messageRoutes from './messageRoutes';
 import newsRoutes from './newsRoutes';
 import notificationRoutes from './notificationRoutes';
 import danceStyleRoutes from './danceStyleRoutes';
+import paymentRoutes from './paymentRoutes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/messages', messageRoutes);
 router.use('/news', newsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/dance-styles', danceStyleRoutes);
+router.use('/payments', paymentRoutes);
 
 export default router;
