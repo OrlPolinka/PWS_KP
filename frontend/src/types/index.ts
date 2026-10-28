@@ -197,6 +197,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   completeGoogleLogin: (data: { user: User; token: string }) => void;
+  updateUser: (user: Partial<User>) => void;
   logout: () => void;
   loading: boolean;
 }

@@ -5,6 +5,7 @@ React + TypeScript frontend for Dance Studio web application.
 ## Features
 
 - **Authentication**: Login, Register, Google OAuth
+- **Account profile**: Edit account name, email, phone, profile photo, and password
 - **Dashboard**: Role-based dashboard for Admin, Trainer, Client
 - **Schedule**: View class schedule with trainer links
 - **Trainers**: View trainer profiles with specialization

@@ -24,7 +24,10 @@ app.use('/api/', limiter);
 app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+app.use('/uploads', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.resolve(__dirname, '../uploads')));
 
 app.use(passport.initialize());
 

@@ -107,6 +107,8 @@ Clients can request a membership extension within 10 days after expiry. Unlimite
 
 Clients can find their unique number and downloadable QR code in **Мой QR-код**. Trainers can select one of their own classes and one of the matching dates on **Посещаемость**, review the roster, and mark a visit by client number or QR scan. Present visits are recorded and decrement a limited membership; no-shows are recorded without decrementing. QR scanning uses a cross-browser scanner and requires camera permission plus HTTPS (localhost is also supported).
 
+All authenticated users can open **Личный кабинет** from their avatar or the floating account button to update their name, email, phone, profile photo, and password. Profile fields are validated by the backend; photos are limited to JPEG, PNG, or WebP up to 5 MB. Password-based accounts must provide their current password when changing it; Google-only accounts can set their first password without one.
+
 3. Set up the database:
 ```bash
 # Create database

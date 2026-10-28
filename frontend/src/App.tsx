@@ -20,6 +20,7 @@ import DanceStyleDetails from './pages/DanceStyleDetails';
 import MembershipExtensionRequests from './pages/MembershipExtensionRequests';
 import TrainerAttendance from './pages/TrainerAttendance';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
+import Profile from './pages/Profile';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -80,6 +81,7 @@ function App() {
           }>
             <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="profile" element={<Profile />} />
             <Route path="schedule" element={<Schedule />} />
             <Route path="schedule/:id" element={<ScheduleDetails />} />
             <Route path="trainers" element={<Trainers />} />

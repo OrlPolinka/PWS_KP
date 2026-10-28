@@ -66,6 +66,61 @@ export class UserService {
     return updatedUser;
   }
 
+  static async updateMyProfile(
+    userId: string,
+    data: { full_name?: unknown; email?: unknown; phone?: unknown; current_password?: unknown; new_password?: unknown },
+    photoUrl?: string
+  ): Promise<User> {
+    const user = await this.getUserById(userId);
+    const fullName = typeof data.full_name === 'string' ? data.full_name.trim() : '';
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
+    const rawPhone = typeof data.phone === 'string' ? data.phone.trim() : '';
+    const phone = rawPhone.replace(/[\s\u00a0\u202f().-]/g, '');
+
+    if (fullName.length < 2 || fullName.length > 100) {
+      throw new Error('Имя должно содержать от 2 до 100 символов.');
+    }
+    if (
+      email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)
+    ) {
+      throw new Error('Введите корректный адрес электронной почты.');
+    }
+    if (
+      phone &&
+      (!/^\+?\d+$/.test(phone) || phone.replace(/\D/g, '').length < 7 || phone.replace(/\D/g, '').length > 15)
+    ) {
+      throw new Error('Введите корректный номер телефона (от 7 до 15 цифр).');
+    }
+
+    const existingEmailUser = await UserRepository.findByEmail(email);
+    if (existingEmailUser && existingEmailUser.id !== userId) {
+      throw new Error('Этот адрес электронной почты уже используется.');
+    }
+
+    const updateData: Partial<User> = { full_name: fullName, email, phone };
+    if (photoUrl) updateData.photo_url = photoUrl;
+
+    const newPassword = typeof data.new_password === 'string' ? data.new_password : '';
+    if (newPassword) {
+      if (newPassword.length < 8 || newPassword.length > 128) {
+        throw new Error('Новый пароль должен содержать от 8 до 128 символов.');
+      }
+
+      if (user.password_hash) {
+        const currentPassword = typeof data.current_password === 'string' ? data.current_password : '';
+        if (!currentPassword || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+          throw new Error('Текущий пароль указан неверно.');
+        }
+      }
+      updateData.password_hash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updatedUser = await UserRepository.update(userId, updateData);
+    if (!updatedUser) throw new Error('Не удалось сохранить профиль.');
+    return updatedUser;
+  }
+
   static async deleteUser(id: string): Promise<void> {
     const user = await UserRepository.findById(id);
     if (!user) {

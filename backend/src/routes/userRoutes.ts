@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { UserController } from '../controllers';
 import { authenticate, authorize } from '../middleware/auth';
+import { profilePhotoUpload } from '../middleware/profilePhotoUpload';
 
 const router = Router();
 
 router.get('/', authenticate, authorize('admin'), UserController.getAllUsers);
 router.post('/create', authenticate, authorize('admin'), UserController.createUserByAdmin);
 router.get('/me', authenticate, UserController.getUserById.bind(UserController));
+router.patch('/me/profile', authenticate, profilePhotoUpload.single('photo'), UserController.updateMyProfile);
 router.get('/qr-code', authenticate, UserController.getQRCode);
 router.get('/by-qr/:qr_token', UserController.getUserByQRToken);
 router.get('/by-code/:client_code', UserController.getUserByClientCode);

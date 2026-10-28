@@ -57,13 +57,15 @@ const Layout = () => {
                     <div className="max-w-40 truncate text-sm font-medium">{user.full_name}</div>
                     <div className="text-xs text-textSecondary capitalize">{user.role}</div>
                   </div>
-                  {user.photo_url ? (
-                    <img src={user.photo_url} alt={user.full_name} className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
-                      <User size={16} className="text-white" />
-                    </div>
-                  )}
+                  <Link to="/profile" aria-label="Личный кабинет" title="Личный кабинет" className="shrink-0 rounded-full ring-offset-2 hover:ring-2 hover:ring-primary">
+                    {user.photo_url ? (
+                      <img src={user.photo_url} alt={user.full_name} className="h-8 w-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
+                        <User size={16} className="text-white" />
+                      </div>
+                    )}
+                  </Link>
                   <button onClick={logout} aria-label="Выйти" className="shrink-0 rounded-lg p-2 transition-colors hover:bg-surface2">
                     <LogOut size={18} className="text-textSecondary" />
                   </button>
@@ -94,6 +96,18 @@ const Layout = () => {
       <main className="w-full min-w-0 max-w-7xl mx-auto px-4 py-6 sm:py-8">
         <Outlet />
       </main>
+      <Link
+        to="/profile"
+        aria-label="Открыть личный кабинет"
+        title="Личный кабинет"
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-surface shadow-lg transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+      >
+        {user.photo_url ? (
+          <img src={user.photo_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <User size={24} className="text-primary" />
+        )}
+      </Link>
     </div>
   );
 };

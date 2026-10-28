@@ -1,8 +1,49 @@
 import { Request, Response } from 'express';
 import { UserService } from '../services';
 import { AppError } from '../middleware/errorHandler';
+import { removePreviousProfilePhoto, removeUploadedProfilePhoto } from '../middleware/profilePhotoUpload';
 
 export class UserController {
+  static async updateMyProfile(req: Request, res: Response) {
+    const uploadedPhoto = req.file;
+    try {
+      const currentUser = await UserService.getUserById(req.user!.userId);
+      const photoUrl = uploadedPhoto
+        ? `${req.protocol}://${req.get('host')}/uploads/${uploadedPhoto.filename}`
+        : undefined;
+      const user = await UserService.updateMyProfile(req.user!.userId, req.body, photoUrl);
+
+      if (uploadedPhoto && currentUser.photo_url !== photoUrl) {
+        try {
+          removePreviousProfilePhoto(currentUser.photo_url, req.get('host') || '');
+        } catch (cleanupError) {
+          console.error('Failed to remove previous profile photo:', cleanupError);
+        }
+      }
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name,
+        phone: user.phone,
+        photo_url: user.photo_url,
+        is_active: user.is_active,
+        client_code: user.client_code,
+      });
+    } catch (error: unknown) {
+      if (uploadedPhoto) {
+        try {
+          removeUploadedProfilePhoto(uploadedPhoto.filename);
+        } catch (cleanupError) {
+          console.error('Failed to remove rejected profile photo:', cleanupError);
+        }
+      }
+      const message = error instanceof Error ? error.message : 'Не удалось сохранить профиль.';
+      throw new AppError(400, message);
+    }
+  }
+
   static async getAllUsers(req: Request, res: Response) {
     try {
       const { role, is_active } = req.query;

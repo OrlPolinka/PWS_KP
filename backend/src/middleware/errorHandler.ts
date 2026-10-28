@@ -32,6 +32,11 @@ export const errorHandler = (
     return;
   }
 
+  if (err.name === 'MulterError') {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
   if (err.name === 'JsonWebTokenError') {
     res.status(401).json({ error: 'Invalid token' });
     return;
