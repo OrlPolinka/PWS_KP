@@ -1,4 +1,4 @@
-import { query } from '../config/database';
+import { getTransactionClient, query } from '../config/database';
 
 export class AttendanceRepository {
   static async create(data: {
@@ -7,13 +7,48 @@ export class AttendanceRepository {
     is_present: boolean;
     notes?: string;
   }): Promise<any> {
-    const result = await query(
-      `INSERT INTO attendance (booking_id, trainer_id, is_present, notes)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [data.booking_id, data.trainer_id, data.is_present, data.notes]
-    );
-    return result.rows[0];
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const bookingResult = await client.query(
+        `SELECT b.id, b.status, m.remaining_visits
+         FROM bookings b
+         JOIN schedule s ON s.id = b.schedule_id
+         JOIN memberships m ON m.id = b.membership_id
+         WHERE b.id = $1 AND s.trainer_id = $2
+         FOR UPDATE OF b, m`,
+        [data.booking_id, data.trainer_id]
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) throw new Error('Booking not found for this trainer');
+      if (booking.status !== 'booked') throw new Error('Cannot mark attendance for non-booked classes');
+      if (data.is_present && booking.remaining_visits !== null && booking.remaining_visits <= 0) {
+        throw new Error('No remaining visits on this membership');
+      }
+
+      const result = await client.query(
+        `INSERT INTO attendance (booking_id, trainer_id, is_present, notes)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [data.booking_id, data.trainer_id, data.is_present, data.notes]
+      );
+      await client.query(
+        `UPDATE bookings
+         SET status = $1,
+             checked_in = $2,
+             checked_in_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+             checked_in_by = CASE WHEN $2 THEN $3::uuid ELSE NULL::uuid END
+         WHERE id = $4`,
+        [data.is_present ? 'attended' : 'no_show', data.is_present, data.trainer_id, data.booking_id]
+      );
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   static async findById(id: number): Promise<any> {
@@ -55,26 +90,70 @@ export class AttendanceRepository {
     return result.rows;
   }
 
-  static async update(id: number, data: { is_present?: boolean; notes?: string }): Promise<any> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
+  static async update(
+    id: number,
+    trainerId: string,
+    data: { is_present?: boolean; notes?: string }
+  ): Promise<any> {
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const attendanceResult = await client.query(
+        `SELECT a.*, b.id AS booking_id, b.membership_id, b.status AS booking_status,
+                m.remaining_visits, mt.visit_count
+         FROM attendance a
+         JOIN bookings b ON b.id = a.booking_id
+         JOIN schedule s ON s.id = b.schedule_id
+         JOIN memberships m ON m.id = b.membership_id
+         JOIN membership_types mt ON mt.id = m.membership_type_id
+         WHERE a.id = $1 AND a.trainer_id = $2 AND s.trainer_id = $2
+         FOR UPDATE OF a, b, m`,
+        [id, trainerId]
+      );
+      const attendance = attendanceResult.rows[0];
+      if (!attendance) throw new Error('Attendance record not found');
 
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && key !== 'id' && key !== 'marked_at') {
-        fields.push(`${key} = $${paramIndex}`);
-        values.push(value);
-        paramIndex++;
+      const nextPresent = data.is_present ?? attendance.is_present;
+      if (!attendance.is_present && nextPresent && attendance.remaining_visits !== null) {
+        const debitResult = await client.query(
+          `UPDATE memberships
+           SET remaining_visits = remaining_visits - 1
+           WHERE id = $1 AND remaining_visits > 0`,
+          [attendance.membership_id]
+        );
+        if (!debitResult.rowCount) throw new Error('No remaining visits on this membership');
+      } else if (attendance.is_present && !nextPresent && attendance.remaining_visits !== null) {
+        await client.query(
+          `UPDATE memberships
+           SET remaining_visits = LEAST(remaining_visits + 1, $2)
+           WHERE id = $1`,
+          [attendance.membership_id, attendance.visit_count]
+        );
       }
-    });
 
-    if (fields.length === 0) {
-      return this.findById(id);
+      const updatedResult = await client.query(
+        `UPDATE attendance
+         SET is_present = $1, notes = COALESCE($2, notes)
+         WHERE id = $3
+         RETURNING *`,
+        [nextPresent, data.notes, id]
+      );
+      await client.query(
+        `UPDATE bookings
+         SET status = $1,
+             checked_in = $2,
+             checked_in_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+             checked_in_by = CASE WHEN $2 THEN $3::uuid ELSE NULL::uuid END
+         WHERE id = $4`,
+        [nextPresent ? 'attended' : 'no_show', nextPresent, trainerId, attendance.booking_id]
+      );
+      await client.query('COMMIT');
+      return updatedResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    values.push(id);
-    const queryText = `UPDATE attendance SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-    const result = await query(queryText, values);
-    return result.rows[0] || null;
   }
 }

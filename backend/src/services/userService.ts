@@ -1,5 +1,5 @@
 import { UserRepository } from '../repositories';
-import { User, UserRole } from '../types';
+import { PublicUser, User, UserRole } from '../types';
 import QRCode from 'qrcode';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
@@ -11,6 +11,20 @@ export class UserService {
       throw new Error('User not found');
     }
     return user;
+  }
+
+  static async getPublicUserById(id: string): Promise<PublicUser> {
+    const user = await this.getUserById(id);
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      full_name: user.full_name,
+      phone: user.phone,
+      photo_url: user.photo_url,
+      is_active: user.is_active,
+      created_at: user.created_at,
+    };
   }
 
   static async getAllUsers(filters?: { role?: UserRole; is_active?: boolean }): Promise<User[]> {

@@ -1,3 +1,6 @@
+-- LEGACY DEMO COPY - DO NOT EXECUTE.
+-- Use database/db_DanceStudio.sql for a fresh database. This file still contains
+-- seed statements for the old schedule and booking schema.
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 

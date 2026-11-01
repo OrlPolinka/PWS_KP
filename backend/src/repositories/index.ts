@@ -10,3 +10,4 @@ export { NewsRepository } from './newsRepository';
 export { NotificationRepository } from './notificationRepository';
 export { DanceStyleRepository } from './danceStyleRepository';
 export { PaymentRepository } from './paymentRepository';
+export { DashboardRepository } from './dashboardRepository';

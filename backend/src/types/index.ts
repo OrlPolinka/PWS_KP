@@ -15,6 +15,11 @@ export interface User {
   updated_at: Date;
 }
 
+export type PublicUser = Pick<
+  User,
+  'id' | 'email' | 'role' | 'full_name' | 'phone' | 'photo_url' | 'is_active' | 'created_at'
+>;
+
 export interface TrainerProfile {
   id: string;
   user_id: string;

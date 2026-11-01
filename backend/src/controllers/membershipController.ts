@@ -95,11 +95,11 @@ export class MembershipController {
   static async cancelMembership(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const membership = await MembershipService.cancelMembership(id);
+      const membership = await MembershipService.cancelMembership(id, req.user!.userId);
       
       res.json(membership);
     } catch (error: any) {
-      throw new AppError(400, error.message);
+      throw new AppError(error.message === 'Membership not found' ? 404 : 400, error.message);
     }
   }
 }

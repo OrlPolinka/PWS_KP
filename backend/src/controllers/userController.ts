@@ -79,10 +79,23 @@ export class UserController {
   }
 
   static async getUserById(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const user = await UserService.getUserById(id);
+    const { id } = req.params;
+    if (req.user!.role !== 'admin' && req.user!.userId !== id) {
+      throw new AppError(403, 'You can only view your own profile');
+    }
 
+    try {
+      const user = await UserService.getPublicUserById(id);
+
+      res.json(user);
+    } catch (error: any) {
+      throw new AppError(404, error.message);
+    }
+  }
+
+  static async getMyProfile(req: Request, res: Response) {
+    try {
+      const user = await UserService.getPublicUserById(req.user!.userId);
       res.json(user);
     } catch (error: any) {
       throw new AppError(404, error.message);

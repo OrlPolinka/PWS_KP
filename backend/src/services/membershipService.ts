@@ -73,9 +73,9 @@ export class MembershipService {
     );
   }
 
-  static async cancelMembership(id: string): Promise<Membership> {
+  static async cancelMembership(id: string, clientId: string): Promise<Membership> {
     const membership = await MembershipRepository.findById(id);
-    if (!membership) {
+    if (!membership || membership.client_id !== clientId) {
       throw new Error('Membership not found');
     }
 

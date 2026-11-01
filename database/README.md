@@ -14,6 +14,15 @@ createdb dance_studio
 psql -U postgres -d dance_studio -f db_DanceStudio.sql
 ```
 
+For a new database, use only `database/db_DanceStudio.sql` as the schema source.
+The similarly named SQL file in the repository root is an obsolete demo copy and
+must not be run: it references the removed `schedule.date` column and contains
+booking inserts that omit required class date/time columns.
+
+In pgAdmin, create an empty `dance_studio` database, select it, open **Tools →
+Query Tool**, open `database/db_DanceStudio.sql`, and execute the whole file.
+This creates the schema but does not insert demo users or other test data.
+
 For an existing database, apply migrations in order. The weekly schedule migration preserves each existing booking date as its class occurrence:
 ```bash
 psql -U postgres -d dance_studio -f migrations/20261010_weekly_schedule.sql

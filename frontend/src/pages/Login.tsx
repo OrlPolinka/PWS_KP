@@ -22,7 +22,7 @@ const Login = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка входа');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Ошибка входа');
     } finally {
       setLoading(false);
     }

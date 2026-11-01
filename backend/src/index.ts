@@ -12,15 +12,27 @@ import { PaymentController } from './controllers';
 
 const app: Application = express();
 
-const limiter = rateLimit({
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { error: 'Превышен лимит запросов. Подождите 15 минут и попробуйте снова.' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много попыток входа или регистрации. Подождите 15 минут и попробуйте снова.' },
 });
 
 app.use(helmet());
 app.use(cors());
-app.use('/api/', limiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/', apiLimiter);
 app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

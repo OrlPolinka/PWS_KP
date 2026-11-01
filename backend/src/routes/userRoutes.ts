@@ -7,7 +7,7 @@ const router = Router();
 
 router.get('/', authenticate, authorize('admin'), UserController.getAllUsers);
 router.post('/create', authenticate, authorize('admin'), UserController.createUserByAdmin);
-router.get('/me', authenticate, UserController.getUserById.bind(UserController));
+router.get('/me', authenticate, UserController.getMyProfile);
 router.patch('/me/profile', authenticate, profilePhotoUpload.single('photo'), UserController.updateMyProfile);
 router.get('/qr-code', authenticate, UserController.getQRCode);
 router.get('/by-qr/:qr_token', UserController.getUserByQRToken);

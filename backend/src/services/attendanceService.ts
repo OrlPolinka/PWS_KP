@@ -1,4 +1,4 @@
-import { AttendanceRepository, BookingRepository, TrainerRepository } from '../repositories';
+import { AttendanceRepository, BookingRepository, ScheduleRepository, TrainerRepository } from '../repositories';
 
 export class AttendanceService {
   static async markAttendance(data: {
@@ -16,9 +16,9 @@ export class AttendanceService {
       throw new Error('Cannot mark attendance for non-booked classes');
     }
 
-    const trainer = await TrainerRepository.findById(data.trainer_id);
-    if (!trainer) {
-      throw new Error('Trainer not found');
+    const schedule = await ScheduleRepository.findById(booking.schedule_id);
+    if (!schedule || schedule.trainer_id !== data.trainer_id) {
+      throw new Error('Attendance can only be marked for your own class');
     }
 
     const existing = await AttendanceRepository.findByBookingId(data.booking_id);
@@ -26,13 +26,7 @@ export class AttendanceService {
       throw new Error('Attendance already marked for this booking');
     }
 
-    const attendance = await AttendanceRepository.create(data);
-
-    await BookingRepository.update(data.booking_id, {
-      status: data.is_present ? 'attended' : 'no_show',
-    });
-
-    return attendance;
+    return AttendanceRepository.create(data);
   }
 
   static async getAttendanceById(id: number): Promise<any> {
@@ -55,29 +49,17 @@ export class AttendanceService {
     return AttendanceRepository.findByTrainerId(trainerId, filters);
   }
 
-  static async updateAttendance(id: number, data: {
+  static async updateAttendance(id: number, trainerId: string, data: {
     is_present?: boolean;
     notes?: string;
   }): Promise<any> {
-    const attendance = await AttendanceRepository.findById(id);
-    if (!attendance) {
-      throw new Error('Attendance record not found');
+    const trainer = await TrainerRepository.findByUserId(trainerId);
+    if (!trainer) {
+      throw new Error('Trainer not found');
     }
 
-    const updated = await AttendanceRepository.update(id, data);
-    if (!updated) {
-      throw new Error('Failed to update attendance');
-    }
-
-    if (data.is_present !== undefined) {
-      const booking = await BookingRepository.findById(attendance.booking_id);
-      if (booking) {
-        await BookingRepository.update(attendance.booking_id, {
-          status: data.is_present ? 'attended' : 'no_show',
-        });
-      }
-    }
-
+    const updated = await AttendanceRepository.update(id, trainer.id, data);
+    if (!updated) throw new Error('Failed to update attendance');
     return updated;
   }
 }

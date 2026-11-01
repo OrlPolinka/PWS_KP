@@ -47,7 +47,7 @@ const Register = () => {
       });
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка регистрации');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Ошибка регистрации');
     } finally {
       setLoading(false);
     }

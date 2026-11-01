@@ -156,11 +156,15 @@ npm start
 ### Users
 - `GET /api/users` - Get all users (Admin only)
 - `POST /api/users/create` - Create user by admin (Admin only - can create trainers and admins, not themselves)
-- `GET /api/users/:id` - Get user by ID (authenticated)
+- `GET /api/users/me` - Get the current user's safe profile fields
+- `GET /api/users/:id` - Get a safe user profile (own profile or Admin only)
 - `PUT /api/users/:id` - Update user (Admin only)
 - `DELETE /api/users/:id` - Delete user (Admin can delete any user except themselves, Clients can delete only their own account)
 - `PATCH /api/users/:id/deactivate` - Deactivate user (Admin only)
 - `PATCH /api/users/:id/activate` - Activate user (Admin only)
+
+### Dashboard
+- `GET /api/dashboard` - Get role-specific live statistics, upcoming classes, and published news
 
 ### Trainers
 - `GET /api/trainers` - List published trainers (Admin can list all)
