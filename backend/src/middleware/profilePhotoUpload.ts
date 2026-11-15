@@ -30,6 +30,7 @@ export const profilePhotoUpload = multer({
 });
 
 export const removeUploadedProfilePhoto = (filename: string): void => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i.test(filename)) return;
   const resolvedPath = path.resolve(uploadDirectory, filename);
   if (path.dirname(resolvedPath) !== uploadDirectory) return;
   if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);
@@ -39,8 +40,10 @@ export const removePreviousProfilePhoto = (photoUrl: string | undefined, request
   if (!photoUrl) return;
 
   try {
-    const url = new URL(photoUrl);
-    if (url.host !== requestHost || !url.pathname.startsWith('/uploads/')) return;
+    const absolute = /^https?:\/\//i.test(photoUrl);
+    const url = new URL(photoUrl, `http://${requestHost || 'localhost'}`);
+    const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    if ((absolute && url.host !== requestHost && !isLocalHost) || !url.pathname.startsWith('/uploads/')) return;
     const filename = path.basename(url.pathname);
     if (filename) removeUploadedProfilePhoto(filename);
   } catch {

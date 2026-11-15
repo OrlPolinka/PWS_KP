@@ -9,7 +9,7 @@ export class UserController {
     try {
       const currentUser = await UserService.getUserById(req.user!.userId);
       const photoUrl = uploadedPhoto
-        ? `${req.protocol}://${req.get('host')}/uploads/${uploadedPhoto.filename}`
+        ? `/uploads/${uploadedPhoto.filename}`
         : undefined;
       const user = await UserService.updateMyProfile(req.user!.userId, req.body, photoUrl);
 

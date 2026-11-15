@@ -4,6 +4,7 @@ import { User, Star, ArrowUpRight, Plus, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 import { TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeMediaUrl } from '../lib/media';
 
 type TrainerForm = {
   full_name: string;
@@ -123,7 +124,7 @@ const TrainersPage = () => {
       {error && !formOpen && <p role="alert" className="mb-4 text-error">{error}</p>}
 
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="text-sm">Поиск по имени, направлению, описанию или email
+        <label className="text-sm">Поиск тренера
           <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, сальса" />
         </label>
         <label className="text-sm">Направление
@@ -136,9 +137,9 @@ const TrainersPage = () => {
           <label className="text-sm">Опыт от, лет<input type="number" min={0} className="input mt-1" value={experienceFrom} onChange={(event) => setExperienceFrom(event.target.value)} /></label>
           <label className="text-sm">Опыт до, лет<input type="number" min={0} className="input mt-1" value={experienceTo} onChange={(event) => setExperienceTo(event.target.value)} /></label>
         </div>
-        {user?.role === 'admin' && <label className="text-sm">Публикация
+        {user?.role === 'admin' && <label className="text-sm">Видимость профиля
           <select className="input mt-1" value={publicationFilter} onChange={(event) => setPublicationFilter(event.target.value)}>
-            <option value="all">Все</option><option value="true">Опубликованные</option><option value="false">Не опубликованные</option>
+            <option value="all">Все профили</option><option value="true">Опубликованные</option><option value="false">Скрытые</option>
           </select>
         </label>}
       </div>
@@ -158,7 +159,7 @@ const TrainersPage = () => {
               <div className="flex min-w-0 items-start space-x-4">
               {trainer.photo_url ? (
                 <img
-                  src={trainer.photo_url}
+                  src={normalizeMediaUrl(trainer.photo_url)}
                   alt={trainer.full_name}
                   className="w-16 h-16 rounded-full object-cover"
                 />

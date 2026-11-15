@@ -3,6 +3,7 @@ import { Camera, Save, UserRound } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types';
+import { normalizeMediaUrl } from '../lib/media';
 
 type ProfileForm = Pick<User, 'full_name' | 'email'> & { phone: string };
 
@@ -138,7 +139,7 @@ const ProfilePage = () => {
         if (!response.data.photo_url || response.data.photo_url === user?.photo_url) {
           throw new Error('Сервер не подтвердил загрузку фото. Проверьте подключение и повторите попытку.');
         }
-        await loadProfileImage(response.data.photo_url);
+        await loadProfileImage(normalizeMediaUrl(response.data.photo_url) || '');
       }
       updateUser(response.data);
       setPhoto(null);
@@ -178,7 +179,7 @@ const ProfilePage = () => {
           <div className="mb-6 flex flex-col items-center gap-4 sm:flex-row">
             <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface2">
               {photoPreview && !photoPreviewError
-                ? <img src={photoPreview} alt="Фото профиля" onError={() => setPhotoPreviewError(true)} className="h-full w-full object-cover" />
+                ? <img src={normalizeMediaUrl(photoPreview)} alt="Фото профиля" onError={() => setPhotoPreviewError(true)} className="h-full w-full object-cover" />
                 : <UserRound size={44} className="text-textSecondary" />}
             </div>
             <div>

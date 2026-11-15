@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { NewsService } from '../services';
 import { AppError } from '../middleware/errorHandler';
+import { removePreviousProfilePhoto, removeUploadedProfilePhoto } from '../middleware/profilePhotoUpload';
 
 export class NewsController {
   static async getAllNews(req: Request, res: Response) {
@@ -33,15 +34,18 @@ export class NewsController {
   }
 
   static async createNews(req: Request, res: Response) {
+    const uploadedImage = req.file;
     try {
       const author_id = req.user!.userId;
       const news = await NewsService.createNews({
         ...req.body,
+        image_url: uploadedImage ? `/uploads/${uploadedImage.filename}` : undefined,
         author_id,
       });
       
       res.status(201).json(news);
     } catch (error: any) {
+      if (uploadedImage) removeUploadedProfilePhoto(uploadedImage.filename);
       throw new AppError(400, error.message);
     }
   }
@@ -60,8 +64,9 @@ export class NewsController {
   static async deleteNews(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const news = await NewsService.getNewsById(id);
       await NewsService.deleteNews(id);
-      
+      removePreviousProfilePhoto(news.image_url, req.get('host') || '');
       res.json({ message: 'News deleted successfully' });
     } catch (error: any) {
       throw new AppError(400, error.message);

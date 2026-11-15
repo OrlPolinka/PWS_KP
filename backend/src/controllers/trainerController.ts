@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { TrainerService } from '../services';
 import { AppError } from '../middleware/errorHandler';
+import { removeTrainerMediaFile, trainerMediaUrl } from '../middleware/trainerMediaUpload';
 
 export class TrainerController {
   static async getAllTrainers(req: Request, res: Response) {
@@ -57,11 +58,44 @@ export class TrainerController {
   }
 
   static async saveProfileMedia(req: Request, res: Response) {
+    const files = (req.files || {}) as { [fieldname: string]: Express.Multer.File[] };
+    const uploadedFiles = [...(files.photo || []), ...(files.media || [])];
     try {
-      const files = (req.files || []) as Express.Multer.File[];
-      const mediaUrls = files.map((file) => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`);
-      res.status(201).json(await TrainerService.addProfileMedia(req.user!.userId, mediaUrls));
+      const photo = files.photo?.[0];
+      if (photo && photo.size > 5 * 1024 * 1024) {
+        throw new Error('Фото профиля не должно превышать 5 МБ.');
+      }
+
+      const trainer = await TrainerService.getMyProfile(req.user!.userId);
+      const media = (files.media || []).map((file) => trainerMediaUrl(file.filename));
+      const result = await TrainerService.saveProfileMedia(
+        req.user!.userId,
+        photo ? trainerMediaUrl(photo.filename) : undefined,
+        media
+      );
+
+      if (photo && trainer.photo_url && trainer.photo_url !== result.photo_url) {
+        removeTrainerMediaFile(trainer.photo_url);
+      }
+      res.status(201).json(result);
     } catch (error: any) {
+      uploadedFiles.forEach((file) => removeTrainerMediaFile(trainerMediaUrl(file.filename)));
+      throw new AppError(400, error.message);
+    }
+  }
+
+  static async removeProfileMedia(req: Request, res: Response) {
+    try {
+      const { url, kind } = req.body as { url?: unknown; kind?: unknown };
+      if (typeof url !== 'string' || (kind !== 'photo' && kind !== 'gallery')) {
+        throw new AppError(400, 'Не удалось определить медиафайл для удаления.');
+      }
+
+      const result = await TrainerService.removeProfileMedia(req.user!.userId, url, kind);
+      removeTrainerMediaFile(url);
+      res.json(result);
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
       throw new AppError(400, error.message);
     }
   }

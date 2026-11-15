@@ -28,8 +28,8 @@ export interface TrainerProfile {
   experience_years?: number;
   education?: string;
   achievements?: string;
-  photo_url?: string;
-  video_url?: string;
+  photo_url?: string | null;
+  video_url?: string | null;
   gallery?: any[];
   certificates?: any[];
   social_links?: any[];

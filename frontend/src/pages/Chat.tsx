@@ -3,6 +3,7 @@ import { CheckCheck, MessageSquare, Pencil, Search, Send, Trash2, User as UserIc
 import api from '../services/api';
 import { Message } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeMediaUrl } from '../lib/media';
 
 type UserRole = 'admin' | 'trainer' | 'client';
 
@@ -222,7 +223,7 @@ const ChatPage = () => {
       }`}
     >
       {contact.photo_url ? (
-        <img src={contact.photo_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+        <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
       ) : (
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
           selectedUser?.id === contact.id ? 'bg-white/20' : 'bg-primary/20'
@@ -317,7 +318,7 @@ const ChatPage = () => {
             <>
               <header className="mb-4 flex items-center gap-3 border-b border-surface2 pb-4">
                 {selectedUser.photo_url ? (
-                  <img src={selectedUser.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  <img src={normalizeMediaUrl(selectedUser.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
                     <UserIcon size={20} className="text-primary" />

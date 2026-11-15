@@ -44,8 +44,8 @@ export class TrainerService {
       experience_years: data.experience_years,
       education: data.education,
       achievements: data.achievements,
-      photo_url: data.photo_url,
-      video_url: data.video_url,
+      photo_url: data.photo_url ?? undefined,
+      video_url: data.video_url ?? undefined,
       gallery: data.gallery,
       certificates: data.certificates,
       social_links: data.social_links,
@@ -108,6 +108,38 @@ export class TrainerService {
     if (!trainer) throw new Error('Trainer profile not found');
     const gallery = Array.isArray(trainer.gallery) ? trainer.gallery : [];
     return TrainerService.updateTrainer(trainer.id, { gallery: [...gallery, ...mediaUrls] });
+  }
+
+  static async saveProfileMedia(userId: string, photoUrl: string | undefined, mediaUrls: string[]): Promise<TrainerProfile> {
+    const trainer = await TrainerRepository.findByUserId(userId);
+    if (!trainer) throw new Error('Trainer profile not found');
+    const data: Partial<TrainerProfile> = {};
+    if (photoUrl !== undefined) data.photo_url = photoUrl;
+    if (mediaUrls.length) {
+      const gallery = Array.isArray(trainer.gallery) ? trainer.gallery : [];
+      data.gallery = [...gallery, ...mediaUrls];
+    }
+    return TrainerService.updateTrainer(trainer.id, data);
+  }
+
+  static async removeProfileMedia(userId: string, mediaUrl: string, kind: 'photo' | 'gallery'): Promise<TrainerProfile> {
+    const trainer = await TrainerRepository.findByUserId(userId);
+    if (!trainer) throw new Error('Trainer profile not found');
+
+    if (kind === 'photo') {
+      if (trainer.photo_url !== mediaUrl) throw new Error('Фото профиля не найдено');
+      return TrainerService.updateTrainer(trainer.id, { photo_url: null });
+    }
+
+    const gallery = Array.isArray(trainer.gallery) ? trainer.gallery : [];
+    const filteredGallery = gallery.filter((item) =>
+      (typeof item === 'string' ? item : item?.url) !== mediaUrl
+    );
+    if (filteredGallery.length === gallery.length) {
+      if (trainer.video_url !== mediaUrl) throw new Error('Медиафайл не найден');
+      return TrainerService.updateTrainer(trainer.id, { video_url: null });
+    }
+    return TrainerService.updateTrainer(trainer.id, { gallery: filteredGallery });
   }
 
   static async setTrainerPublished(id: string, isPublished: boolean): Promise<TrainerProfile> {

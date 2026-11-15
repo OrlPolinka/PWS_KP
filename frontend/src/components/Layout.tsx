@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeMediaUrl } from '../lib/media';
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -59,7 +60,7 @@ const Layout = () => {
                   </div>
                   <Link to="/profile" aria-label="Личный кабинет" title="Личный кабинет" className="shrink-0 rounded-full ring-offset-2 hover:ring-2 hover:ring-primary">
                     {user.photo_url ? (
-                      <img src={user.photo_url} alt={user.full_name} className="h-8 w-8 rounded-full object-cover" />
+                      <img src={normalizeMediaUrl(user.photo_url)} alt={user.full_name} className="h-8 w-8 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
                         <User size={16} className="text-white" />
@@ -103,7 +104,7 @@ const Layout = () => {
         className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-surface shadow-lg transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
       >
         {user.photo_url ? (
-          <img src={user.photo_url} alt="" className="h-full w-full object-cover" />
+          <img src={normalizeMediaUrl(user.photo_url)} alt="" className="h-full w-full object-cover" />
         ) : (
           <User size={24} className="text-primary" />
         )}

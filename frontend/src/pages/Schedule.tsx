@@ -47,6 +47,7 @@ const SchedulePage = () => {
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState(searchParams.get('trainer') || '');
   const [selectedStyle, setSelectedStyle] = useState(searchParams.get('style') || '');
@@ -133,6 +134,9 @@ const SchedulePage = () => {
       window.alert(deleteError.response?.data?.error || 'Не удалось удалить занятие');
     }
   };
+  const selectedDateDay = selectedDate
+    ? new Date(`${selectedDate}T00:00:00`).getDay() || 7
+    : undefined;
   const visibleSchedules = schedules.filter((schedule) => {
     const searchText = `${schedule.dance_style_name} ${schedule.trainer_name} ${schedule.hall_name}`.toLocaleLowerCase('ru');
     const start = formatTime(schedule.start_time);
@@ -141,6 +145,7 @@ const SchedulePage = () => {
       ? selectedStatus === 'all' || schedule.status === selectedStatus
       : schedule.status === 'scheduled') &&
       (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+      (selectedDateDay === undefined || schedule.day_of_week === selectedDateDay) &&
       (!selectedDay || String(schedule.day_of_week) === selectedDay) &&
       (!selectedTrainer || schedule.trainer_id === selectedTrainer) &&
       (!selectedStyle || String(schedule.dance_style_id) === selectedStyle) &&
@@ -156,6 +161,7 @@ const SchedulePage = () => {
   const resetFilters = () => {
     setSearchParams({});
     setSearch('');
+    setSelectedDate('');
     setSelectedDay('');
     setSelectedTrainer('');
     setSelectedStyle('');
@@ -184,6 +190,10 @@ const SchedulePage = () => {
 
       <section className="mb-8 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск по стилю, тренеру или залу<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label className="text-sm">Дата занятия
+          <input type="date" className="input mt-1" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+          <span className="mt-1 block text-xs text-textSecondary">Покажет занятия по дню недели этой даты.</span>
+        </label>
         <label className="text-sm">День недели<select className="input mt-1" value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}><option value="">Все дни</option>{weekDays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}</select></label>
         <label className="text-sm">Тренер<select className="input mt-1" value={selectedTrainer} onChange={(event) => setSelectedTrainer(event.target.value)}><option value="">Все тренеры</option>{trainerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         <label className="text-sm">Стиль<select className="input mt-1" value={selectedStyle} onChange={(event) => setSelectedStyle(event.target.value)}><option value="">Все стили</option>{styleOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>

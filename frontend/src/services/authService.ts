@@ -23,7 +23,7 @@ export const authService = {
   },
 
   googleLogin() {
-    const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
     window.location.href = `${apiUrl}/auth/google`;
   },
 };

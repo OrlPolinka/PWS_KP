@@ -3,13 +3,14 @@ import { Calendar, User as UserIcon, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { News } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeMediaUrl } from '../lib/media';
 
 const NewsPage = () => {
   const { user } = useAuth();
   const [news, setNews] = useState<News[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [image, setImage] = useState<File | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,10 +34,14 @@ const NewsPage = () => {
     event.preventDefault();
     setError('');
     try {
-      await api.post('/news', { title, content, image_url: imageUrl || undefined });
+      const data = new FormData();
+      data.append('title', title);
+      data.append('content', content);
+      if (image) data.append('image', image);
+      await api.post('/news', data, { headers: { 'Content-Type': undefined } });
       setTitle('');
       setContent('');
-      setImageUrl('');
+      setImage(null);
       setFormOpen(false);
       await fetchNews();
     } catch (createError: any) {
@@ -78,7 +83,10 @@ const NewsPage = () => {
         <form onSubmit={createNews} className="card mb-8 space-y-4">
           <label className="block text-sm">Заголовок<input required maxLength={255} className="input mt-1" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
           <label className="block text-sm">Текст новости<textarea required rows={5} className="input mt-1" value={content} onChange={(event) => setContent(event.target.value)} /></label>
-          <label className="block text-sm">Ссылка на изображение<input type="url" className="input mt-1" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
+          <label className="block text-sm">Изображение новости
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="input mt-1" onChange={(event) => setImage(event.target.files?.[0] || null)} />
+            <span className="mt-1 block text-xs text-textSecondary">JPEG, PNG или WebP, до 5 МБ.</span>
+          </label>
           {error && <p role="alert" className="text-error">{error}</p>}
           <button type="submit" className="btn btn-primary">Опубликовать</button>
         </form>
@@ -106,7 +114,7 @@ const NewsPage = () => {
 
             {user?.role === 'admin' && !item.is_published && <p className="mb-3 text-sm text-warning">Черновик</p>}
 
-            {item.image_url && <img src={item.image_url} alt="" className="mb-4 max-h-96 w-full rounded-lg object-cover" />}
+            {item.image_url && <img src={normalizeMediaUrl(item.image_url)} alt="" className="mb-4 max-h-96 w-full rounded-lg object-cover" />}
 
             <div className="prose prose-invert max-w-none">
               <p className="whitespace-pre-wrap">{item.content}</p>
