@@ -13,6 +13,7 @@ import notificationRoutes from './notificationRoutes';
 import danceStyleRoutes from './danceStyleRoutes';
 import paymentRoutes from './paymentRoutes';
 import dashboardRoutes from './dashboardRoutes';
+import chatbotRoutes from './chatbotRoutes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/dance-styles', danceStyleRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/chatbot', chatbotRoutes);
 
 export default router;

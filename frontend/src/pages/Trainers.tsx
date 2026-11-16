@@ -199,6 +199,11 @@ const TrainersPage = () => {
               >
                 Посмотреть расписание →
               </Link>
+              {(user?.role === 'admin' || user?.role === 'trainer') && (
+                <Link to={`/users/${encodeURIComponent(trainer.user_id)}`} className="text-sm text-primary hover:underline">
+                  Контакты и данные аккаунта
+                </Link>
+              )}
             </div>
           </article>
         ))}

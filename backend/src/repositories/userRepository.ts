@@ -1,5 +1,5 @@
 import { query, getTransactionClient } from '../config/database';
-import { User, UserRole } from '../types';
+import { PublicUser, User, UserRole } from '../types';
 import bcrypt from 'bcryptjs';
 
 export class UserRepository {
@@ -83,8 +83,16 @@ export class UserRepository {
     return (result.rowCount || 0) > 0;
   }
 
-  static async findAll(filters?: { role?: UserRole; is_active?: boolean }): Promise<User[]> {
-    let queryText = 'SELECT * FROM users WHERE 1=1';
+  static async findAll(filters?: {
+    role?: UserRole;
+    is_active?: boolean;
+    search?: string;
+  }): Promise<PublicUser[]> {
+    let queryText = `
+      SELECT id, email, role, full_name, phone, photo_url, is_active, created_at
+      FROM users
+      WHERE 1=1
+    `;
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -97,6 +105,16 @@ export class UserRepository {
     if (filters?.is_active !== undefined) {
       queryText += ` AND is_active = $${paramIndex}`;
       params.push(filters.is_active);
+      paramIndex++;
+    }
+
+    if (filters?.search) {
+      queryText += ` AND (
+        full_name ILIKE $${paramIndex}
+        OR email ILIKE $${paramIndex}
+        OR COALESCE(phone, '') ILIKE $${paramIndex}
+      )`;
+      params.push(`%${filters.search}%`);
       paramIndex++;
     }
 

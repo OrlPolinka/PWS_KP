@@ -21,6 +21,8 @@ import MembershipExtensionRequests from './pages/MembershipExtensionRequests';
 import TrainerAttendance from './pages/TrainerAttendance';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Profile from './pages/Profile';
+import Users from './pages/Users';
+import UserDetails from './pages/UserDetails';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -50,11 +52,11 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const RoleRoute = ({ role, children }: { role: string; children: React.ReactNode }) => {
+const RoleRoute = ({ role, children }: { role: string | string[]; children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center">Загрузка...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (user.role !== role) return <Navigate to="/dashboard" />;
+  if (!(Array.isArray(role) ? role : [role]).includes(user.role)) return <Navigate to="/dashboard" />;
   return <>{children}</>;
 };
 
@@ -82,6 +84,8 @@ function App() {
             <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="users" element={<RoleRoute role={['admin', 'trainer']}><Users /></RoleRoute>} />
+            <Route path="users/:id" element={<RoleRoute role={['admin', 'trainer']}><UserDetails /></RoleRoute>} />
             <Route path="schedule" element={<Schedule />} />
             <Route path="schedule/:id" element={<ScheduleDetails />} />
             <Route path="trainers" element={<Trainers />} />

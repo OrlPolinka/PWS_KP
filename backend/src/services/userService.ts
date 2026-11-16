@@ -27,7 +27,11 @@ export class UserService {
     };
   }
 
-  static async getAllUsers(filters?: { role?: UserRole; is_active?: boolean }): Promise<User[]> {
+  static async getAllUsers(filters?: {
+    role?: UserRole;
+    is_active?: boolean;
+    search?: string;
+  }): Promise<PublicUser[]> {
     return UserRepository.findAll(filters);
   }
 

@@ -137,6 +137,25 @@ const TrainerProfilePage = () => {
           <h1 className="text-3xl font-bold">{profile.full_name}</h1>
           <p className="mt-1 text-primary">{profile.specialization || 'Тренер'}</p>
           {profile.experience_years !== undefined && <p className="mt-1 text-sm text-textSecondary">Опыт: {profile.experience_years} лет</p>}
+          {(profile.email || profile.phone) && (
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              {profile.email && (
+                <a href={`mailto:${profile.email}`} className="break-all text-primary hover:underline">
+                  {profile.email}
+                </a>
+              )}
+              {profile.phone && (
+                <a href={`tel:${profile.phone}`} className="text-primary hover:underline">
+                  {profile.phone}
+                </a>
+              )}
+            </div>
+          )}
+          {(user?.role === 'admin' || user?.role === 'trainer') && (
+            <Link to={`/users/${encodeURIComponent(profile.user_id)}`} className="mt-2 inline-block text-sm text-primary hover:underline">
+              Контакты и данные аккаунта
+            </Link>
+          )}
         </div>
       </header>
 

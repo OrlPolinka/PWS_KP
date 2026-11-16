@@ -33,6 +33,17 @@ psql -U postgres -d dance_studio -f migrations/20261017_membership_prices_byn.sq
 psql -U postgres -d dance_studio -f migrations/20261017_stripe_payment_currency.sql
 psql -U postgres -d dance_studio -f migrations/20261017_membership_extension_requests.sql
 psql -U postgres -d dance_studio -f migrations/20261017_client_checkin_codes.sql
+psql -U postgres -d dance_studio -f migrations/20261116_chatbot_faq.sql
+```
+
+The Docker Compose database service persists PostgreSQL files in the `postgres_data`
+named volume and mounts the initial schema plus the chatbot FAQ migration read-only
+under `/docker-entrypoint-initdb.d/`. These init scripts run automatically only when
+PostgreSQL initializes an empty data volume. For an existing Compose database, apply
+the migration once with:
+
+```powershell
+docker compose exec -T database psql -U postgres -d dance_studio -f /docker-entrypoint-initdb.d/002-chatbot-faq.sql
 ```
 
 ## Schema
@@ -49,5 +60,6 @@ The schema includes tables for:
 - bookings
 - attendance
 - messages
+- chatbot_faqs (вопросы и ответы чат-бота)
 - notifications
 - news

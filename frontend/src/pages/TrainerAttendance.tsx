@@ -10,6 +10,7 @@ interface TrainerProfile {
 
 interface AttendanceRosterItem {
   booking_id: string;
+  attendance_id: number | null;
   booking_status: 'booked' | 'attended' | 'no_show';
   checked_in_at: string | null;
   client_id: string;
@@ -64,6 +65,7 @@ const TrainerAttendancePage = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [editingAttendanceId, setEditingAttendanceId] = useState<string | null>(null);
   const [identifier, setIdentifier] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerStarting, setScannerStarting] = useState(false);
@@ -146,6 +148,25 @@ const TrainerAttendancePage = () => {
       setError(message || 'Не удалось отметить посещение.');
     }
   }, [scheduleId, classDate, fetchRoster]);
+
+  const updateAttendance = async (client: AttendanceRosterItem, isPresent: boolean) => {
+    if (client.attendance_id === null || client.is_present === isPresent) return;
+    setError('');
+    setNotice('');
+    try {
+      await api.put(`/attendance/${client.attendance_id}`, { is_present: isPresent });
+      setEditingAttendanceId(null);
+      setNotice(isPresent
+        ? `Отметка исправлена: ${client.client_name} был на занятии.`
+        : `Отметка исправлена: ${client.client_name} не был на занятии.`);
+      await fetchRoster();
+    } catch (updateError: unknown) {
+      const message = typeof updateError === 'object' && updateError !== null && 'response' in updateError
+        ? (updateError as { response?: { data?: { error?: string } } }).response?.data?.error
+        : undefined;
+      setError(message || 'Не удалось исправить отметку посещения.');
+    }
+  };
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -317,11 +338,45 @@ const TrainerAttendancePage = () => {
                     </p>
                   )}
                 </div>
-                {client.booking_status === 'booked' && (
+                  {client.booking_status === 'booked' ? (
                   <div className="flex gap-2">
                     <button type="button" onClick={() => void markAttendance(client.client_code, true)} className="btn btn-primary">Был</button>
                     <button type="button" onClick={() => void markAttendance(client.client_code, false)} className="btn btn-secondary">Не был</button>
                   </div>
+                  ) : client.attendance_id !== null && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {editingAttendanceId === client.booking_id ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void updateAttendance(client, true)}
+                            disabled={client.is_present === true}
+                            className="btn btn-primary disabled:opacity-50"
+                          >
+                            Был
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void updateAttendance(client, false)}
+                            disabled={client.is_present === false}
+                            className="btn btn-secondary disabled:opacity-50"
+                          >
+                            Не был
+                          </button>
+                          <button type="button" onClick={() => setEditingAttendanceId(null)} className="text-sm text-textSecondary hover:underline">
+                            Отмена
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAttendanceId(client.booking_id)}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Исправить отметку
+                        </button>
+                      )}
+                    </div>
                 )}
               </article>
             ))}

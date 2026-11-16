@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { UserService } from '../services';
 import { AppError } from '../middleware/errorHandler';
 import { removePreviousProfilePhoto, removeUploadedProfilePhoto } from '../middleware/profilePhotoUpload';
+import { UserRole } from '../types';
 
 export class UserController {
   static async updateMyProfile(req: Request, res: Response) {
@@ -47,9 +48,15 @@ export class UserController {
   static async getAllUsers(req: Request, res: Response) {
     try {
       const { role, is_active } = req.query;
+      const roleFilter = typeof role === 'string' ? role : undefined;
+      if (roleFilter && !['admin', 'trainer', 'client'].includes(roleFilter)) {
+        throw new AppError(400, 'Некорректный фильтр роли');
+      }
+
       const users = await UserService.getAllUsers({
-        role: role as any,
+        role: roleFilter as UserRole | undefined,
         is_active: is_active === 'true' ? true : is_active === 'false' ? false : undefined,
+        search: typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : undefined,
       });
 
       res.json(users);
@@ -80,8 +87,9 @@ export class UserController {
 
   static async getUserById(req: Request, res: Response) {
     const { id } = req.params;
-    if (req.user!.role !== 'admin' && req.user!.userId !== id) {
-      throw new AppError(403, 'You can only view your own profile');
+    const canViewDirectory = req.user!.role === 'admin' || req.user!.role === 'trainer';
+    if (!canViewDirectory && req.user!.userId !== id) {
+      throw new AppError(403, 'Можно просматривать только собственный профиль');
     }
 
     try {

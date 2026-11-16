@@ -29,6 +29,7 @@ const Layout = () => {
     { path: '/styles', icon: User, label: 'Стили танцев', roles: ['admin', 'trainer', 'client'] },
     { path: '/memberships', icon: CreditCard, label: 'Абонементы', roles: ['admin', 'client'] },
     { path: '/membership-extension-requests', icon: Clock, label: 'Запросы на продление', roles: ['admin'] },
+    { path: '/users', icon: Users, label: 'Пользователи', roles: ['admin', 'trainer'] },
     { path: '/attendance', icon: ClipboardCheck, label: 'Посещаемость', roles: ['trainer'] },
     { path: '/qr-code', icon: QrCode, label: 'Мой QR-код', roles: ['client'] },
     { path: '/bookings', icon: Calendar, label: 'Бронирования', roles: ['client'] },

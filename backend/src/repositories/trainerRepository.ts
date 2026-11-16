@@ -4,7 +4,7 @@ import { TrainerProfile } from '../types';
 export class TrainerRepository {
   static async findById(id: string): Promise<TrainerProfile | null> {
     const result = await query(
-      `SELECT t.*, u.full_name, u.email, u.photo_url AS user_photo_url, u.is_active
+      `SELECT t.*, u.full_name, u.email, u.phone, u.photo_url AS user_photo_url, u.is_active
        FROM trainers t JOIN users u ON u.id = t.user_id WHERE t.id = $1`,
       [id]
     );
@@ -13,7 +13,7 @@ export class TrainerRepository {
 
   static async findByUserId(userId: string): Promise<TrainerProfile | null> {
     const result = await query(
-      `SELECT t.*, u.full_name, u.email, u.photo_url AS user_photo_url, u.is_active
+      `SELECT t.*, u.full_name, u.email, u.phone, u.photo_url AS user_photo_url, u.is_active
        FROM trainers t JOIN users u ON u.id = t.user_id WHERE t.user_id = $1`,
       [userId]
     );

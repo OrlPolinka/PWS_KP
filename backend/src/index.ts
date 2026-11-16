@@ -9,6 +9,7 @@ import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 import routes from './routes';
 import { PaymentController } from './controllers';
+import { BookingService } from './services';
 
 const app: Application = express();
 
@@ -56,6 +57,20 @@ const PORT = config.port;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${config.nodeEnv}`);
+
+  const markPastBookings = async () => {
+    try {
+      const updatedCount = await BookingService.markPastBookingsAsNoShow();
+      if (updatedCount > 0) {
+        console.log(`Automatically marked ${updatedCount} past booking(s) as no-show`);
+      }
+    } catch (error) {
+      console.error('Failed to mark past bookings as no-show:', error);
+    }
+  };
+
+  void markPastBookings();
+  setInterval(() => void markPastBookings(), 60_000);
 });
 
 export default app;

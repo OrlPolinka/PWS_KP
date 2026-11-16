@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Calendar, Clock, MapPin, User as UserIcon, X, Check } from 'lucide-react';
 import api from '../services/api';
 import { Booking, Membership, ScheduleListItem } from '../types';
@@ -28,6 +28,14 @@ const upcomingDatesForWeekday = (dayOfWeek: number, startTime: string) => {
   });
 };
 
+const getApiError = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response;
+    if (response?.data?.error) return response.data.error;
+  }
+  return fallback;
+};
+
 const BookingsPage = () => {
   const [searchParams] = useSearchParams();
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
@@ -36,6 +44,8 @@ const BookingsPage = () => {
   const [selectedMembershipId, setSelectedMembershipId] = useState('');
   const [selectedDates, setSelectedDates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
+  const [bookingError, setBookingError] = useState('');
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingStatus, setBookingStatus] = useState('');
   const [bookingDateFrom, setBookingDateFrom] = useState('');
@@ -69,25 +79,45 @@ const BookingsPage = () => {
       setAvailableSchedules(schedulesRes.data.filter((s: ScheduleListItem) => s.status === 'scheduled'));
       setMemberships(membershipsRes.data.filter((membership: Membership) => membership.status === 'active'));
       setSelectedMembershipId((current) => current || membershipsRes.data.find((membership: Membership) => membership.status === 'active')?.id || '');
+      setDataError('');
     } catch (error) {
-      console.error('Error fetching data:', error);
+      setDataError(getApiError(error, 'Не удалось загрузить бронирования, расписание или абонементы.'));
     } finally {
       setLoading(false);
     }
   };
 
+  const getApplicableMemberships = (schedule: ScheduleListItem) => {
+    const classDate = selectedDates[schedule.id] || nextDateForWeekday(schedule.day_of_week, schedule.start_time);
+    return memberships.filter((membership) =>
+      membership.start_date.slice(0, 10) <= classDate &&
+      membership.end_date.slice(0, 10) >= classDate &&
+      (membership.membership_dance_style_id == null || membership.membership_dance_style_id === schedule.dance_style_id) &&
+      (membership.remaining_visits == null || membership.remaining_visits > 0)
+    );
+  };
+
   const bookClass = async (scheduleId: string) => {
     const schedule = availableSchedules.find((item) => item.id === scheduleId);
-    if (!schedule || !selectedMembershipId) return;
+    if (!schedule) return;
+    const applicableMemberships = getApplicableMemberships(schedule);
+    const selectedMembership = applicableMemberships.find((membership) => membership.id === selectedMembershipId)
+      || applicableMemberships[0];
+    if (!selectedMembership) {
+      setBookingError('Нет активного абонемента, подходящего для выбранной даты и занятия.');
+      return;
+    }
+
+    setBookingError('');
     try {
       await api.post('/bookings', {
         schedule_id: scheduleId,
-        membership_id: selectedMembershipId,
+        membership_id: selectedMembership.id,
         class_date: selectedDates[scheduleId] || nextDateForWeekday(schedule.day_of_week, schedule.start_time),
       });
-      fetchData();
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Ошибка бронирования');
+      await fetchData();
+    } catch (error: unknown) {
+      setBookingError(getApiError(error, 'Не удалось записаться на занятие.'));
     }
   };
 
@@ -131,6 +161,30 @@ const BookingsPage = () => {
   const scheduleTrainers = Array.from(new Map(availableSchedules.map((schedule) => [schedule.trainer_id, schedule.trainer_name])));
   const scheduleHalls = Array.from(new Set(availableSchedules.map((schedule) => schedule.hall_name))).sort();
 
+  const renderBookingAction = (schedule: ScheduleListItem) => {
+    const applicableMemberships = getApplicableMemberships(schedule);
+    const blockReason = memberships.length === 0
+      ? 'Нужен активный абонемент'
+      : applicableMemberships.length === 0
+        ? 'Нет подходящего абонемента на эту дату и стиль'
+        : '';
+
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <button
+          onClick={() => void bookClass(schedule.id)}
+          disabled={applicableMemberships.length === 0}
+          title={blockReason || undefined}
+          className="btn btn-primary flex items-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Check size={16} />
+          <span>Записаться</span>
+        </button>
+        {blockReason && <span className="max-w-48 text-right text-xs text-textSecondary">{blockReason}</span>}
+      </div>
+    );
+  };
+
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
   }
@@ -138,6 +192,7 @@ const BookingsPage = () => {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-8">Мои бронирования</h1>
+      {dataError && <p role="alert" className="card mb-6 border-error text-error">{dataError}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
@@ -207,6 +262,15 @@ const BookingsPage = () => {
 
         <div>
           <h2 className="text-xl font-bold mb-4">Доступные занятия</h2>
+          {memberships.length === 0 && (
+            <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="font-medium">Для записи нужен активный абонемент.</p>
+              <Link to="/memberships" className="mt-1 inline-block text-sm text-primary hover:underline">
+                Посмотреть абонементы →
+              </Link>
+            </div>
+          )}
+          {bookingError && <p role="alert" className="card mb-4 border-error text-error">{bookingError}</p>}
           <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2">
             <label className="text-sm">Поиск по занятию, тренеру или залу<input className="input mt-1" value={scheduleSearch} onChange={(event) => setScheduleSearch(event.target.value)} /></label>
             <label className="text-sm">Стиль<select className="input mt-1" value={scheduleStyle} onChange={(event) => setScheduleStyle(event.target.value)}><option value="">Все стили</option>{scheduleStyles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
@@ -257,23 +321,13 @@ const BookingsPage = () => {
                       >
                         {upcomingDatesForWeekday(schedule.day_of_week, schedule.start_time).map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}
                       </select>
-                      <button
-                        onClick={() => bookClass(schedule.id)}
-                        disabled={memberships.length === 0}
-                        className="btn btn-primary flex items-center space-x-2 disabled:opacity-50"
-                      >
-                        <Check size={16} />
-                        <span>Записаться</span>
-                      </button>
+                      {renderBookingAction(schedule)}
                     </div>
                   </div>
                 </div>
               ))
             )}
           </div>
-          {memberships.length === 0 && (
-            <p className="mt-4 text-sm text-textSecondary">Для записи нужен активный абонемент. Оформить его можно в разделе «Абонементы».</p>
-          )}
           {memberships.length > 1 && <label className="mt-4 block max-w-md text-sm">Использовать абонемент
             <select className="input mt-1" value={selectedMembershipId} onChange={(event) => setSelectedMembershipId(event.target.value)}>
               {memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.membership_type?.name || 'Абонемент'} · до {formatDate(membership.end_date)}</option>)}

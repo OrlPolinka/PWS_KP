@@ -9,6 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/db_DanceStudio.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./database/migrations/20261116_chatbot_faq.sql:/docker-entrypoint-initdb.d/002-chatbot-faq.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s

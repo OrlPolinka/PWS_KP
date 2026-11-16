@@ -12,3 +12,4 @@ export { NotificationController } from './notificationController';
 export { DanceStyleController } from './danceStyleController';
 export { PaymentController } from './paymentController';
 export { DashboardController } from './dashboardController';
+export { ChatbotController } from './chatbotController';

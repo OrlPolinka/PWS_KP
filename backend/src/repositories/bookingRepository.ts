@@ -2,6 +2,55 @@ import { query, getTransactionClient } from '../config/database';
 import { Booking } from '../types';
 
 export class BookingRepository {
+  static async markPastBookingsAsNoShow(batchSize = 500): Promise<number> {
+    const client = await getTransactionClient();
+    try {
+      await client.query('BEGIN');
+      const expiredBookings = await client.query(
+        `SELECT b.id, s.trainer_id
+         FROM bookings b
+         JOIN schedule s ON s.id = b.schedule_id
+         WHERE b.status = 'booked'
+           AND b.class_end <= NOW()
+           AND NOT EXISTS (
+             SELECT 1 FROM attendance a WHERE a.booking_id = b.id
+           )
+         ORDER BY b.class_end
+         LIMIT $1
+         FOR UPDATE OF b SKIP LOCKED`,
+        [batchSize]
+      );
+
+      let updatedCount = 0;
+      for (const booking of expiredBookings.rows) {
+        const attendance = await client.query(
+          `INSERT INTO attendance (booking_id, trainer_id, is_present, notes)
+           VALUES ($1, $2, false, $3)
+           ON CONFLICT (booking_id) DO NOTHING
+           RETURNING booking_id`,
+          [booking.id, booking.trainer_id, 'Автоматически отмечено как неявка: время занятия прошло, отметки тренера нет.']
+        );
+        if (!attendance.rowCount) continue;
+
+        const updated = await client.query(
+          `UPDATE bookings
+           SET status = 'no_show', checked_in = false, checked_in_at = NULL, checked_in_by = NULL
+           WHERE id = $1 AND status = 'booked'`,
+          [booking.id]
+        );
+        updatedCount += updated.rowCount || 0;
+      }
+
+      await client.query('COMMIT');
+      return updatedCount;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   static async findById(id: string): Promise<Booking | null> {
     const result = await query(
       `SELECT b.*, b.class_date, s.day_of_week, s.start_time, s.end_time, ds.name as dance_style_name,
@@ -204,6 +253,7 @@ export class BookingRepository {
   static async findAttendanceRoster(scheduleId: string, classDate: string, trainerUserId: string): Promise<any[]> {
     const result = await query(
       `SELECT b.id AS booking_id, b.status AS booking_status, b.checked_in_at,
+              a.id AS attendance_id,
               u.id AS client_id, u.full_name AS client_name, u.phone AS client_phone,
               u.client_code, m.remaining_visits, mt.name AS membership_name,
               a.is_present, a.marked_at

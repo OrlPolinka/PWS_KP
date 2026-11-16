@@ -2,6 +2,10 @@ import { BookingRepository, ScheduleRepository, MembershipRepository, TrainerRep
 import { Booking } from '../types';
 
 export class BookingService {
+  static async markPastBookingsAsNoShow(): Promise<number> {
+    return BookingRepository.markPastBookingsAsNoShow();
+  }
+
   static async getBookingById(id: string): Promise<Booking> {
     const booking = await BookingRepository.findById(id);
     if (!booking) {

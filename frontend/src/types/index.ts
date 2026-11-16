@@ -14,6 +14,17 @@ export interface User {
   updated_at: string;
 }
 
+export interface DirectoryUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  full_name: string;
+  phone?: string;
+  photo_url?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Trainer {
   id: string;
   user_id: string;

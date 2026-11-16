@@ -7,15 +7,17 @@ export class MessageRepository {
     full_name: string;
     role: string;
     photo_url?: string;
+    trainer_id?: string | null;
   }>> {
     const result = await query(
-      `SELECT id, full_name, role, photo_url
+      `SELECT users.id, users.full_name, users.role, users.photo_url, trainers.id AS trainer_id
        FROM users
-       WHERE id <> $1
-         AND is_active = true
-         AND full_name ILIKE $2
-         AND ($3::text IS NULL OR role = $3)
-       ORDER BY full_name
+       LEFT JOIN trainers ON trainers.user_id = users.id
+       WHERE users.id <> $1
+         AND users.is_active = true
+         AND users.full_name ILIKE $2
+         AND ($3::text IS NULL OR users.role = $3)
+       ORDER BY users.full_name
        LIMIT 50`,
       [userId, `%${search}%`, role || null]
     );
@@ -108,6 +110,7 @@ export class MessageRepository {
         other_user.full_name,
         other_user.role,
         other_user.photo_url,
+        trainer_profile.id AS trainer_id,
         conversations.last_message_time,
         last_message.content AS last_message,
         last_message.is_read AS last_message_is_read,
@@ -115,6 +118,7 @@ export class MessageRepository {
         COALESCE(unread.unread_count, 0)::int AS unread_count
        FROM conversation_list conversations
        JOIN users other_user ON other_user.id = conversations.other_user_id
+       LEFT JOIN trainers trainer_profile ON trainer_profile.user_id = other_user.id
        LEFT JOIN LATERAL (
          SELECT content, is_read, sender_id FROM messages
          WHERE (sender_id = $1 AND receiver_id = conversations.other_user_id)

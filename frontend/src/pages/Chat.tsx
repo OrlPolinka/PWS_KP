@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { CheckCheck, MessageSquare, Pencil, Search, Send, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Bot, CheckCheck, MessageSquare, Pencil, Search, Send, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { Message } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeMediaUrl } from '../lib/media';
+import ChatbotAdminPanel from '../components/ChatbotAdminPanel';
 
 type UserRole = 'admin' | 'trainer' | 'client';
 
@@ -12,12 +14,19 @@ interface ChatContact {
   full_name: string;
   role: UserRole;
   photo_url?: string;
+  trainer_id?: string | null;
 }
 
 interface Conversation extends ChatContact {
   last_message?: string;
   last_message_time: string;
   unread_count: number;
+}
+
+interface ChatbotFaq {
+  id: number;
+  question: string;
+  answer: string;
 }
 
 const roleLabels: Record<UserRole, string> = {
@@ -42,6 +51,12 @@ const ChatPage = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [selectedUser, setSelectedUser] = useState<ChatContact | null>(null);
+  const [selectedBot, setSelectedBot] = useState(user?.role === 'client');
+  const [faqSearch, setFaqSearch] = useState('');
+  const [faqs, setFaqs] = useState<ChatbotFaq[]>([]);
+  const [botExchanges, setBotExchanges] = useState<ChatbotFaq[]>([]);
+  const [loadingFaqs, setLoadingFaqs] = useState(false);
+  const [faqError, setFaqError] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [search, setSearch] = useState('');
@@ -55,6 +70,34 @@ const ChatPage = () => {
   const [sidebarError, setSidebarError] = useState('');
   const [chatError, setChatError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const botMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedBot || user?.role !== 'client') return;
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setLoadingFaqs(true);
+      try {
+        const response = await api.get<ChatbotFaq[]>('/chatbot/faqs', {
+          params: { search: faqSearch.trim() },
+        });
+        if (!cancelled) {
+          setFaqs(response.data);
+          setFaqError('');
+        }
+      } catch (error) {
+        if (!cancelled) setFaqError(getErrorMessage(error, 'Не удалось загрузить подсказки чат-бота'));
+      } finally {
+        if (!cancelled) setLoadingFaqs(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [selectedBot, faqSearch, user?.role]);
 
   const fetchConversations = async () => {
     try {
@@ -150,11 +193,29 @@ const ChatPage = () => {
   }, [messages.length, selectedUser?.id]);
 
   const selectUser = (contact: ChatContact) => {
+    setSelectedBot(false);
     setSelectedUser(contact);
     setChatError('');
     setEditingId(null);
     setEditingContent('');
   };
+
+  const selectBot = () => {
+    setSelectedBot(true);
+    setSelectedUser(null);
+    setFaqSearch('');
+    setFaqError('');
+    setChatError('');
+  };
+
+  const selectFaq = (faq: ChatbotFaq) => {
+    setBotExchanges((current) => [...current, faq]);
+    setFaqSearch('');
+  };
+
+  useEffect(() => {
+    botMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [botExchanges.length, selectedBot]);
 
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -212,44 +273,113 @@ const ChatPage = () => {
 
   const conversationIds = new Set(conversations.map((conversation) => conversation.id));
   const availableContacts = contacts.filter((contact) => !conversationIds.has(contact.id));
+  const canViewUserProfiles = user?.role === 'admin' || user?.role === 'trainer';
+  const getProfilePath = (contact: ChatContact) => {
+    if (contact.role === 'trainer' && contact.trainer_id) {
+      return `/trainers/${encodeURIComponent(contact.trainer_id)}`;
+    }
+    return canViewUserProfiles ? `/users/${encodeURIComponent(contact.id)}` : undefined;
+  };
 
-  const renderContact = (contact: ChatContact, conversation?: Conversation) => (
-    <button
-      key={contact.id}
-      type="button"
-      onClick={() => selectUser(contact)}
-      className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors ${
-        selectedUser?.id === contact.id ? 'bg-primary text-white' : 'hover:bg-surface2'
-      }`}
-    >
-      {contact.photo_url ? (
-        <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-      ) : (
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-          selectedUser?.id === contact.id ? 'bg-white/20' : 'bg-primary/20'
-        }`}>
-          <UserIcon size={20} className={selectedUser?.id === contact.id ? 'text-white' : 'text-primary'} />
+  const renderContact = (contact: ChatContact, conversation?: Conversation) => {
+    const profilePath = getProfilePath(contact);
+    const selected = selectedUser?.id === contact.id;
+    const avatar = contact.photo_url ? (
+      <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
+    ) : (
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+        selected ? 'bg-white/20' : 'bg-primary/20'
+      }`}>
+        <UserIcon size={20} className={selected ? 'text-white' : 'text-primary'} />
+      </div>
+    );
+
+    return (
+      <div
+        key={contact.id}
+        className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors ${
+          selected ? 'bg-primary text-white' : 'hover:bg-surface2'
+        }`}
+      >
+        {profilePath ? (
+          <Link
+            to={profilePath}
+            aria-label={`Открыть профиль: ${contact.full_name}`}
+            title={contact.role === 'trainer' ? 'Открыть страницу тренера' : 'Открыть профиль пользователя'}
+            className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {avatar}
+          </Link>
+        ) : avatar}
+        <span className="min-w-0 flex-1">
+          {profilePath ? (
+            <Link to={profilePath} className="block truncate font-medium hover:underline">
+              {contact.full_name}
+            </Link>
+          ) : (
+            <button type="button" onClick={() => selectUser(contact)} className="block max-w-full truncate text-left font-medium">
+              {contact.full_name}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => selectUser(contact)}
+            className={`block max-w-full truncate text-left text-sm ${
+              selected ? 'text-white/70' : 'text-textSecondary'
+            }`}
+          >
+            {conversation?.last_message || roleLabels[contact.role]}
+          </button>
+        </span>
+        {conversation && conversation.unread_count > 0 && (
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white">
+            {conversation.unread_count}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderContactHeader = (contact: ChatContact) => {
+    const profilePath = getProfilePath(contact);
+    const avatar = contact.photo_url ? (
+      <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
+    ) : (
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
+        <UserIcon size={20} className="text-primary" />
+      </div>
+    );
+
+    return (
+      <header className="mb-4 flex items-center gap-3 border-b border-surface2 pb-4">
+        {profilePath ? (
+          <Link
+            to={profilePath}
+            aria-label={`Открыть профиль: ${contact.full_name}`}
+            title={contact.role === 'trainer' ? 'Открыть страницу тренера' : 'Открыть профиль пользователя'}
+            className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {avatar}
+          </Link>
+        ) : avatar}
+        <div>
+          <h2 className="font-bold">
+            {profilePath ? (
+              <Link to={profilePath} className="hover:text-primary hover:underline">
+                {contact.full_name}
+              </Link>
+            ) : contact.full_name}
+          </h2>
+          <p className="text-sm text-textSecondary">{roleLabels[contact.role]}</p>
         </div>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{contact.full_name}</span>
-        <span className={`block truncate text-sm ${
-          selectedUser?.id === contact.id ? 'text-white/70' : 'text-textSecondary'
-        }`}>
-          {conversation?.last_message || roleLabels[contact.role]}
-        </span>
-      </span>
-      {conversation && conversation.unread_count > 0 && (
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white">
-          {conversation.unread_count}
-        </span>
-      )}
-    </button>
-  );
+      </header>
+    );
+  };
 
   return (
     <div>
       <h1 className="mb-6 text-3xl font-bold">Чат</h1>
+      {user?.role === 'admin' && <ChatbotAdminPanel />}
 
       <div className="grid min-h-[calc(100vh-12rem)] grid-cols-1 gap-4 lg:h-[calc(100vh-13rem)] lg:min-h-[34rem] lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.75fr)]">
         <aside className="card flex min-h-[22rem] flex-col overflow-hidden p-4 lg:min-h-0">
@@ -283,6 +413,30 @@ const ChatPage = () => {
           {sidebarError && <p role="alert" className="mb-3 text-sm text-error">{sidebarError}</p>}
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+            {user?.role === 'client' && (
+              <section>
+                <button
+                  type="button"
+                  onClick={selectBot}
+                  className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors ${
+                    selectedBot ? 'bg-primary text-white' : 'bg-primary/5 hover:bg-primary/10'
+                  }`}
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                    selectedBot ? 'bg-white/20' : 'bg-primary/15'
+                  }`}>
+                    <Bot size={21} className={selectedBot ? 'text-white' : 'text-primary'} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">Помощник студии</span>
+                    <span className={`block text-sm ${selectedBot ? 'text-white/75' : 'text-textSecondary'}`}>
+                      Готовые ответы на частые вопросы
+                    </span>
+                  </span>
+                </button>
+              </section>
+            )}
+
             <section>
               <h3 className="mb-2 text-sm font-semibold text-textSecondary">Последние диалоги</h3>
               {loadingConversations && conversations.length === 0 ? (
@@ -314,21 +468,80 @@ const ChatPage = () => {
         </aside>
 
         <section className="card flex min-h-[28rem] flex-col overflow-hidden p-4 lg:min-h-0">
-          {selectedUser ? (
+          {selectedBot && user?.role === 'client' ? (
             <>
               <header className="mb-4 flex items-center gap-3 border-b border-surface2 pb-4">
-                {selectedUser.photo_url ? (
-                  <img src={normalizeMediaUrl(selectedUser.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
-                    <UserIcon size={20} className="text-primary" />
-                  </div>
-                )}
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15">
+                  <Bot size={22} className="text-primary" />
+                </div>
                 <div>
-                  <h2 className="font-bold">{selectedUser.full_name}</h2>
-                  <p className="text-sm text-textSecondary">{roleLabels[selectedUser.role]}</p>
+                  <h2 className="font-bold">Помощник студии</h2>
+                  <p className="text-sm text-textSecondary">Выберите вопрос или начните вводить свой</p>
                 </div>
               </header>
+
+              <div className="flex-1 space-y-4 overflow-y-auto pb-4" aria-live="polite">
+                {botExchanges.map((exchange, index) => (
+                  <div key={`${exchange.id}-${index}`} className="space-y-3">
+                    <div className="flex justify-end">
+                      <p className="max-w-[85%] rounded-xl bg-primary p-3 text-white">{exchange.question}</p>
+                    </div>
+                    <div className="flex justify-start">
+                      <p className="max-w-[90%] whitespace-pre-wrap rounded-xl bg-surface2 p-3">{exchange.answer}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <section className="rounded-xl bg-surface2/60 p-4">
+                  <h3 className="mb-3 text-sm font-semibold">
+                    {faqSearch.trim() ? 'Похожие вопросы' : botExchanges.length ? 'Может быть полезно' : 'Популярные вопросы'}
+                  </h3>
+                  {loadingFaqs ? (
+                    <p className="text-sm text-textSecondary">Ищем подходящие ответы...</p>
+                  ) : faqs.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {faqs.map((faq) => (
+                        <button
+                          key={faq.id}
+                          type="button"
+                          onClick={() => selectFaq(faq)}
+                          className="rounded-full border border-primary/30 bg-surface px-3 py-2 text-left text-sm text-primary transition-colors hover:border-primary hover:bg-primary/5"
+                        >
+                          {faq.question}
+                        </button>
+                      ))}
+                    </div>
+                  ) : faqSearch.trim() ? (
+                    <p className="text-sm text-textSecondary">
+                      Похожих ответов не нашлось. Попробуйте другие слова или напишите администратору в обычном чате.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-textSecondary">Пока нет доступных вопросов.</p>
+                  )}
+                  {faqError && <p role="alert" className="mt-3 text-sm text-error">{faqError}</p>}
+                </section>
+                <div ref={botMessagesEndRef} />
+              </div>
+
+              <label className="relative block border-t border-surface2 pt-3">
+                <Search size={18} className="absolute left-3 top-6 text-textSecondary" />
+                <input
+                  type="search"
+                  value={faqSearch}
+                  onChange={(event) => setFaqSearch(event.target.value)}
+                  maxLength={100}
+                  className="input pl-10"
+                  placeholder="Например: как записаться на тренировку?"
+                  aria-label="Поиск вопросов чат-бота"
+                />
+                <span className="mt-2 block text-xs text-textSecondary">
+                  Начните вводить вопрос — покажем похожие варианты из базы ответов.
+                </span>
+              </label>
+            </>
+          ) : selectedUser ? (
+            <>
+              {renderContactHeader(selectedUser)}
 
               <div className="flex-1 space-y-4 overflow-y-auto pb-4" aria-live="polite">
                 {loadingMessages ? (

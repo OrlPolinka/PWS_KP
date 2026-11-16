@@ -12,3 +12,4 @@ export { NotificationService } from './notificationService';
 export { DanceStyleService } from './danceStyleService';
 export { PaymentService } from './paymentService';
 export { DashboardService } from './dashboardService';
+export { ChatbotService } from './chatbotService';

@@ -5,7 +5,7 @@ import { profilePhotoUpload } from '../middleware/profilePhotoUpload';
 
 const router = Router();
 
-router.get('/', authenticate, authorize('admin'), UserController.getAllUsers);
+router.get('/', authenticate, authorize('admin', 'trainer'), UserController.getAllUsers);
 router.post('/create', authenticate, authorize('admin'), UserController.createUserByAdmin);
 router.get('/me', authenticate, UserController.getMyProfile);
 router.patch('/me/profile', authenticate, profilePhotoUpload.single('photo'), UserController.updateMyProfile);
