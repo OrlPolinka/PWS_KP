@@ -110,11 +110,16 @@ export class UserRepository {
 
     if (filters?.search) {
       queryText += ` AND (
-        full_name ILIKE $${paramIndex}
-        OR email ILIKE $${paramIndex}
-        OR COALESCE(phone, '') ILIKE $${paramIndex}
+        LEFT(LOWER(full_name), LENGTH($${paramIndex})) = LOWER($${paramIndex})
+        OR LEFT(LOWER(email), LENGTH($${paramIndex})) = LOWER($${paramIndex})
+        OR LEFT(LOWER(COALESCE(phone, '')), LENGTH($${paramIndex})) = LOWER($${paramIndex})
+        OR EXISTS (
+          SELECT 1
+          FROM regexp_split_to_table(LOWER(CONCAT_WS(' ', full_name, email, phone)), '[^[:alnum:]]+') AS search_words(word)
+          WHERE LEFT(search_words.word, LENGTH($${paramIndex})) = LOWER($${paramIndex})
+        )
       )`;
-      params.push(`%${filters.search}%`);
+      params.push(filters.search);
       paramIndex++;
     }
 

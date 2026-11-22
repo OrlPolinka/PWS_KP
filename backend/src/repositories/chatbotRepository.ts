@@ -19,21 +19,18 @@ export class ChatbotRepository {
        WHERE ($2::boolean OR is_active = true)
          AND (
            $1 = ''
-           OR question ILIKE '%' || $1 || '%'
-           OR answer ILIKE '%' || $1 || '%'
+           OR LEFT(LOWER(question), LENGTH($1)) = LOWER($1)
+           OR LEFT(LOWER(answer), LENGTH($1)) = LOWER($1)
+           OR LEFT(LOWER(keywords), LENGTH($1)) = LOWER($1)
            OR EXISTS (
              SELECT 1
-             FROM regexp_split_to_table(lower($1), '[[:space:]]+') AS terms(term)
-             WHERE length(term) >= 2
-               AND (
-                 lower(question) LIKE '%' || term || '%'
-                 OR lower(keywords) LIKE '%' || term || '%'
-               )
+             FROM regexp_split_to_table(LOWER(CONCAT_WS(' ', question, answer, keywords)), '[^[:alnum:]]+') AS search_words(word)
+             WHERE LEFT(search_words.word, LENGTH($1)) = LOWER($1)
            )
          )
        ORDER BY
          CASE WHEN lower(question) = lower($1) AND $1 <> '' THEN 0
-              WHEN lower(question) LIKE lower($1) || '%' AND $1 <> '' THEN 1
+              WHEN LEFT(LOWER(question), LENGTH($1)) = LOWER($1) AND $1 <> '' THEN 1
               ELSE 2 END,
          sort_order, question
        LIMIT 50`,

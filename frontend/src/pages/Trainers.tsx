@@ -5,6 +5,10 @@ import api from '../services/api';
 import { TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeMediaUrl } from '../lib/media';
+import { matchesSearchPrefix } from '../lib/search';
+import NumericInput from '../components/NumericInput';
+import { useActionDialog } from '../components/ActionDialog';
+import PasswordInput from '../components/PasswordInput';
 
 type TrainerForm = {
   full_name: string;
@@ -22,6 +26,7 @@ const emptyForm: TrainerForm = {
 
 const TrainersPage = () => {
   const { user } = useAuth();
+  const { confirm, dialog } = useActionDialog();
   const [trainers, setTrainers] = useState<TrainerListItem[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -32,6 +37,7 @@ const TrainersPage = () => {
   const [experienceFrom, setExperienceFrom] = useState('');
   const [experienceTo, setExperienceTo] = useState('');
   const [publicationFilter, setPublicationFilter] = useState('all');
+  const invalidExperienceRange = Boolean(experienceFrom && experienceTo && Number(experienceFrom) > Number(experienceTo));
 
   useEffect(() => {
     fetchTrainers();
@@ -80,7 +86,7 @@ const TrainersPage = () => {
   };
 
   const deleteTrainer = async (trainer: TrainerListItem) => {
-    if (!window.confirm(`Удалить тренера ${trainer.full_name} вместе с его расписанием, бронированиями и историей посещений?`)) return;
+    if (!await confirm(`Удалить тренера ${trainer.full_name} вместе с его расписанием, бронированиями и историей посещений?`)) return;
     try {
       await api.delete(`/trainers/${trainer.id}`);
       await fetchTrainers();
@@ -89,9 +95,17 @@ const TrainersPage = () => {
     }
   };
 
+  const resetFilters = () => {
+    setSearch('');
+    setSpecializationFilter('');
+    setExperienceFrom('');
+    setExperienceTo('');
+    setPublicationFilter('all');
+  };
+
   const visibleTrainers = trainers.filter((trainer) => {
-    const searchText = `${trainer.full_name} ${trainer.email} ${trainer.phone || ''} ${trainer.specialization || ''} ${trainer.bio || ''}`.toLocaleLowerCase('ru');
-    return (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+    return !invalidExperienceRange &&
+      matchesSearchPrefix(search, trainer.full_name, trainer.email, trainer.phone, trainer.specialization, trainer.bio) &&
       (!specializationFilter || trainer.specialization === specializationFilter) &&
       (!experienceFrom || (trainer.experience_years !== undefined && trainer.experience_years >= Number(experienceFrom))) &&
       (!experienceTo || (trainer.experience_years !== undefined && trainer.experience_years <= Number(experienceTo))) &&
@@ -104,6 +118,7 @@ const TrainersPage = () => {
 
   return (
     <div>
+      {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Наши тренеры</h1>
         {user?.role === 'admin' && <button onClick={() => { setError(''); setFormOpen(!formOpen); }} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить тренера</button>}
@@ -113,10 +128,10 @@ const TrainersPage = () => {
         <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">Новый тренер</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
         <label className="text-sm">Имя и фамилия<input required className="input mt-1" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></label>
         <label className="text-sm">Email<input required type="email" className="input mt-1" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-        <label className="text-sm">Временный пароль<input required minLength={8} type="password" className="input mt-1" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+        <label className="text-sm">Временный пароль<PasswordInput required minLength={8} className="input mt-1" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
         <label className="text-sm">Телефон<input type="tel" className="input mt-1" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
         <label className="text-sm">Направление<input className="input mt-1" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /></label>
-        <label className="text-sm">Опыт, лет<input type="number" min={0} className="input mt-1" value={form.experience_years} onChange={(event) => setForm({ ...form, experience_years: event.target.value })} /></label>
+        <label className="text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={form.experience_years} onChange={(event) => setForm({ ...form, experience_years: event.target.value })} /></label>
         <label className="text-sm sm:col-span-2">Описание профиля<textarea rows={3} className="input mt-1" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
         {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
         <button type="submit" className="btn btn-primary sm:col-span-2">Создать аккаунт тренера</button>
@@ -125,7 +140,7 @@ const TrainersPage = () => {
 
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск тренера
-          <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, сальса" />
+          <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, Анна Зубарева" />
         </label>
         <label className="text-sm">Направление
           <select className="input mt-1" value={specializationFilter} onChange={(event) => setSpecializationFilter(event.target.value)}>
@@ -134,8 +149,8 @@ const TrainersPage = () => {
           </select>
         </label>
         <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm">Опыт от, лет<input type="number" min={0} className="input mt-1" value={experienceFrom} onChange={(event) => setExperienceFrom(event.target.value)} /></label>
-          <label className="text-sm">Опыт до, лет<input type="number" min={0} className="input mt-1" value={experienceTo} onChange={(event) => setExperienceTo(event.target.value)} /></label>
+          <label className="text-sm">Опыт от, лет<NumericInput min={0} max={experienceTo || 70} step={1} className="input mt-1" value={experienceFrom} onChange={(event) => setExperienceFrom(event.target.value)} /></label>
+          <label className="text-sm">Опыт до, лет<NumericInput min={experienceFrom || 0} max={70} step={1} className="input mt-1" value={experienceTo} onChange={(event) => setExperienceTo(event.target.value)} /></label>
         </div>
         {user?.role === 'admin' && <label className="text-sm">Видимость профиля
           <select className="input mt-1" value={publicationFilter} onChange={(event) => setPublicationFilter(event.target.value)}>
@@ -143,7 +158,11 @@ const TrainersPage = () => {
           </select>
         </label>}
       </div>
-      <p className="mb-4 text-sm text-textSecondary">Найдено тренеров: {visibleTrainers.length}</p>
+      {invalidExperienceRange && <p role="alert" className="mb-4 text-error">Опыт «от» не может быть больше опыта «до».</p>}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-textSecondary">Найдено тренеров: {visibleTrainers.length}</p>
+        <button type="button" onClick={resetFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visibleTrainers.length === 0 ? (

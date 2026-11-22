@@ -18,6 +18,11 @@ const UsersPage = () => {
   const [active, setActive] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const resetFilters = () => {
+    setSearch('');
+    setRole('');
+    setActive('');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +96,9 @@ const UsersPage = () => {
             <option value="false">Неактивные</option>
           </select>
         </label>
+        <button type="button" onClick={resetFilters} className="text-left text-sm text-primary hover:underline sm:col-span-2 lg:col-span-3">
+          Сбросить фильтры
+        </button>
       </section>
 
       {error && <p role="alert" className="card mb-4 border-error text-error">{error}</p>}

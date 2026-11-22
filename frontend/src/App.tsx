@@ -88,7 +88,7 @@ function App() {
             <Route path="users/:id" element={<RoleRoute role={['admin', 'trainer']}><UserDetails /></RoleRoute>} />
             <Route path="schedule" element={<Schedule />} />
             <Route path="schedule/:id" element={<ScheduleDetails />} />
-            <Route path="trainers" element={<Trainers />} />
+            <Route path="trainers" element={<RoleRoute role={['admin', 'client']}><Trainers /></RoleRoute>} />
             <Route path="trainers/:id" element={<TrainerProfile />} />
             <Route path="my-profile" element={<RoleRoute role="trainer"><TrainerProfile /></RoleRoute>} />
             <Route path="attendance" element={<RoleRoute role="trainer"><TrainerAttendance /></RoleRoute>} />

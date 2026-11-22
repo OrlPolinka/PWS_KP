@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types';
 import { normalizeMediaUrl } from '../lib/media';
+import PasswordInput from '../components/PasswordInput';
 
 type ProfileForm = Pick<User, 'full_name' | 'email'> & { phone: string };
 
@@ -247,8 +248,7 @@ const ProfilePage = () => {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm sm:col-span-2">
               Текущий пароль
-              <input
-                type="password"
+              <PasswordInput
                 className="input mt-1"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
@@ -257,8 +257,7 @@ const ProfilePage = () => {
             </label>
             <label className="text-sm">
               Новый пароль
-              <input
-                type="password"
+              <PasswordInput
                 className="input mt-1"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
@@ -269,8 +268,7 @@ const ProfilePage = () => {
             </label>
             <label className="text-sm">
               Повторите новый пароль
-              <input
-                type="password"
+              <PasswordInput
                 className="input mt-1"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}

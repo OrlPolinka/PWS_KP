@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Bot, ChevronDown, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import api from '../services/api';
+import { useActionDialog } from './ActionDialog';
 
 interface ChatbotFaq {
   id: number;
@@ -20,6 +21,7 @@ interface FaqForm {
 const emptyForm: FaqForm = { question: '', answer: '', keywords: '', is_active: true };
 
 const ChatbotAdminPanel = () => {
+  const { confirm, dialog } = useActionDialog();
   const [faqs, setFaqs] = useState<ChatbotFaq[]>([]);
   const [form, setForm] = useState<FaqForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -78,7 +80,7 @@ const ChatbotAdminPanel = () => {
   };
 
   const deleteFaq = async (faq: ChatbotFaq) => {
-    if (!window.confirm(`Удалить вопрос «${faq.question}»?`)) return;
+    if (!await confirm(`Удалить вопрос «${faq.question}»?`)) return;
     setError('');
     setNotice('');
     try {
@@ -95,6 +97,8 @@ const ChatbotAdminPanel = () => {
   };
 
   return (
+    <>
+    {dialog}
     <details className="card group mb-6">
       <summary className="flex cursor-pointer list-none items-center gap-3">
         <Bot className="shrink-0 text-primary" size={24} />
@@ -235,6 +239,7 @@ const ChatbotAdminPanel = () => {
         </section>
       </div>
     </details>
+    </>
   );
 };
 

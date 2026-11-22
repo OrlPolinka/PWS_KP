@@ -2,13 +2,13 @@ import { MessageRepository, UserRepository } from '../repositories';
 import { Message } from '../types';
 
 export class MessageService {
-  static async getContacts(userId: string, search = '', role?: string) {
+  static async getContacts(userId: string, search = '', role?: string, excludeClients = false) {
     const allowedRoles = ['admin', 'trainer', 'client'];
     if (role && !allowedRoles.includes(role)) {
       throw new Error('Invalid role filter');
     }
 
-    return MessageRepository.getContacts(userId, search.trim().slice(0, 100), role);
+    return MessageRepository.getContacts(userId, search.trim().slice(0, 100), role, excludeClients);
   }
 
   static async getMessageById(id: number): Promise<Message> {
@@ -36,6 +36,10 @@ export class MessageService {
     const receiver = await UserRepository.findById(data.receiver_id);
     if (!receiver) {
       throw new Error('Receiver not found');
+    }
+
+    if (sender.role === 'client' && receiver.role === 'client') {
+      throw new Error('Клиенты не могут начинать диалог с другими клиентами');
     }
 
     if (!sender.is_active || !receiver.is_active) {
@@ -88,6 +92,10 @@ export class MessageService {
       throw new Error('One or both users not found');
     }
 
+    if (user1.role === 'client' && user2.role === 'client') {
+      throw new Error('Клиенты не могут открывать диалоги с другими клиентами');
+    }
+
     return MessageRepository.getDialog(userId1, userId2, limit);
   }
 
@@ -97,7 +105,7 @@ export class MessageService {
       throw new Error('User not found');
     }
 
-    return MessageRepository.getUserConversations(userId);
+    return MessageRepository.getUserConversations(userId, user.role === 'client');
   }
 
   static async markMessageAsRead(id: number, userId: string): Promise<Message> {

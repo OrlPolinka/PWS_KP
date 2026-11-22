@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Calendar, Clock, MapPin, User as UserIcon, X, Check } from 'lucide-react';
 import api from '../services/api';
 import { Booking, Membership, ScheduleListItem } from '../types';
+import { getTodayDate, matchesSearchPrefix } from '../lib/search';
 
 const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
@@ -55,14 +56,21 @@ const BookingsPage = () => {
   const [scheduleTrainer, setScheduleTrainer] = useState('');
   const [scheduleHall, setScheduleHall] = useState('');
   const [scheduleDay, setScheduleDay] = useState('');
+  const today = getTodayDate();
+  const invalidBookingDateRange = Boolean(bookingDateFrom && bookingDateTo && bookingDateFrom > bookingDateTo);
+  const invalidBookingDates = Boolean(
+    (bookingDateFrom && bookingDateFrom < today) ||
+    (bookingDateTo && bookingDateTo < today) ||
+    invalidBookingDateRange
+  );
 
   useEffect(() => {
     const scheduleId = searchParams.get('schedule');
     const classDate = searchParams.get('class_date');
-    if (scheduleId && classDate) {
+    if (scheduleId && classDate && /^\d{4}-\d{2}-\d{2}$/.test(classDate) && classDate >= today) {
       setSelectedDates((current) => ({ ...current, [scheduleId]: classDate }));
     }
-  }, [searchParams]);
+  }, [searchParams, today]);
 
   useEffect(() => {
     fetchData();
@@ -100,6 +108,11 @@ const BookingsPage = () => {
   const bookClass = async (scheduleId: string) => {
     const schedule = availableSchedules.find((item) => item.id === scheduleId);
     if (!schedule) return;
+    const classDate = selectedDates[scheduleId] || nextDateForWeekday(schedule.day_of_week, schedule.start_time);
+    if (classDate < today) {
+      setBookingError('Нельзя записаться на прошедшую дату.');
+      return;
+    }
     const applicableMemberships = getApplicableMemberships(schedule);
     const selectedMembership = applicableMemberships.find((membership) => membership.id === selectedMembershipId)
       || applicableMemberships[0];
@@ -113,12 +126,27 @@ const BookingsPage = () => {
       await api.post('/bookings', {
         schedule_id: scheduleId,
         membership_id: selectedMembership.id,
-        class_date: selectedDates[scheduleId] || nextDateForWeekday(schedule.day_of_week, schedule.start_time),
+        class_date: classDate,
       });
       await fetchData();
     } catch (error: unknown) {
       setBookingError(getApiError(error, 'Не удалось записаться на занятие.'));
     }
+  };
+
+  const resetBookingFilters = () => {
+    setBookingSearch('');
+    setBookingStatus('');
+    setBookingDateFrom('');
+    setBookingDateTo('');
+  };
+
+  const resetScheduleFilters = () => {
+    setScheduleSearch('');
+    setScheduleStyle('');
+    setScheduleTrainer('');
+    setScheduleHall('');
+    setScheduleDay('');
   };
 
   const cancelBooking = async (bookingId: string) => {
@@ -143,15 +171,14 @@ const BookingsPage = () => {
   const formatTime = (timeString?: string) => timeString?.slice(0, 5) || '—';
 
   const visibleBookings = myBookings.filter((booking) => {
-    const searchText = `${booking.dance_style_name || ''} ${booking.trainer_name || ''} ${booking.hall_name || ''}`.toLocaleLowerCase('ru');
     const date = booking.class_date.slice(0, 10);
-    return (!bookingSearch || searchText.includes(bookingSearch.toLocaleLowerCase('ru'))) &&
+    return !invalidBookingDates &&
+      matchesSearchPrefix(bookingSearch, booking.dance_style_name, booking.trainer_name, booking.hall_name) &&
       (!bookingStatus || booking.status === bookingStatus) &&
       (!bookingDateFrom || date >= bookingDateFrom) && (!bookingDateTo || date <= bookingDateTo);
   });
   const visibleSchedules = availableSchedules.filter((schedule) => {
-    const searchText = `${schedule.dance_style_name} ${schedule.trainer_name} ${schedule.hall_name}`.toLocaleLowerCase('ru');
-    return (!scheduleSearch || searchText.includes(scheduleSearch.toLocaleLowerCase('ru'))) &&
+    return matchesSearchPrefix(scheduleSearch, schedule.dance_style_name, schedule.trainer_name, schedule.hall_name) &&
       (!scheduleStyle || String(schedule.dance_style_id) === scheduleStyle) &&
       (!scheduleTrainer || schedule.trainer_id === scheduleTrainer) &&
       (!scheduleHall || schedule.hall_name === scheduleHall) &&
@@ -200,9 +227,13 @@ const BookingsPage = () => {
           <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2">
             <label className="text-sm">Поиск по занятию, тренеру или залу<input className="input mt-1" value={bookingSearch} onChange={(event) => setBookingSearch(event.target.value)} /></label>
             <label className="text-sm">Статус<select className="input mt-1" value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}><option value="">Все статусы</option><option value="booked">Забронировано</option><option value="cancelled">Отменено</option><option value="attended">Посещено</option><option value="no_show">Неявка</option></select></label>
-            <label className="text-sm">Дата занятия от<input type="date" className="input mt-1" value={bookingDateFrom} onChange={(event) => setBookingDateFrom(event.target.value)} /></label>
-            <label className="text-sm">Дата занятия до<input type="date" className="input mt-1" value={bookingDateTo} onChange={(event) => setBookingDateTo(event.target.value)} /></label>
-            <p className="text-sm text-textSecondary sm:col-span-2">Найдено: {visibleBookings.length}</p>
+            <label className="text-sm">Дата занятия от<input type="date" min={today} max={bookingDateTo || undefined} className="input mt-1" value={bookingDateFrom} onChange={(event) => setBookingDateFrom(event.target.value)} /></label>
+            <label className="text-sm">Дата занятия до<input type="date" min={bookingDateFrom || today} className="input mt-1" value={bookingDateTo} onChange={(event) => setBookingDateTo(event.target.value)} /></label>
+            {invalidBookingDates && <p role="alert" className="text-error sm:col-span-2">{invalidBookingDateRange ? 'Дата «от» не может быть позже даты «до».' : 'Нельзя выбрать прошедшую дату.'}</p>}
+            <div className="flex items-center justify-between gap-3 sm:col-span-2">
+              <p className="text-sm text-textSecondary">Найдено: {visibleBookings.length}</p>
+              <button type="button" onClick={resetBookingFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+            </div>
           </div>
           <div className="space-y-4">
             {visibleBookings.length === 0 ? (
@@ -277,7 +308,10 @@ const BookingsPage = () => {
             <label className="text-sm">Тренер<select className="input mt-1" value={scheduleTrainer} onChange={(event) => setScheduleTrainer(event.target.value)}><option value="">Все тренеры</option>{scheduleTrainers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
             <label className="text-sm">Зал<select className="input mt-1" value={scheduleHall} onChange={(event) => setScheduleHall(event.target.value)}><option value="">Все залы</option>{scheduleHalls.map((hall) => <option key={hall} value={hall}>{hall}</option>)}</select></label>
             <label className="text-sm">День недели<select className="input mt-1" value={scheduleDay} onChange={(event) => setScheduleDay(event.target.value)}><option value="">Все дни</option>{Array.from({ length: 7 }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{dayNames[day % 7]}</option>)}</select></label>
-            <p className="text-sm text-textSecondary sm:self-end">Найдено: {visibleSchedules.length}</p>
+            <div className="flex items-center justify-between gap-3 sm:col-span-2">
+              <p className="text-sm text-textSecondary">Найдено: {visibleSchedules.length}</p>
+              <button type="button" onClick={resetScheduleFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+            </div>
           </div>
           <div className="space-y-4">
             {visibleSchedules.length === 0 ? (
@@ -316,7 +350,9 @@ const BookingsPage = () => {
                       <select
                         aria-label={`Дата занятия: ${schedule.dance_style_name}`}
                         value={selectedDates[schedule.id] || nextDateForWeekday(schedule.day_of_week, schedule.start_time)}
-                        onChange={(event) => setSelectedDates({ ...selectedDates, [schedule.id]: event.target.value })}
+                        onChange={(event) => {
+                          if (event.target.value >= today) setSelectedDates({ ...selectedDates, [schedule.id]: event.target.value });
+                        }}
                         className="input max-w-48"
                       >
                         {upcomingDatesForWeekday(schedule.day_of_week, schedule.start_time).map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}

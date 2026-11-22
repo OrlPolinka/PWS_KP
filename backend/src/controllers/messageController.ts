@@ -8,7 +8,8 @@ export class MessageController {
       const contacts = await MessageService.getContacts(
         req.user!.userId,
         typeof req.query.search === 'string' ? req.query.search : '',
-        typeof req.query.role === 'string' ? req.query.role : undefined
+        typeof req.query.role === 'string' ? req.query.role : undefined,
+        req.user!.role === 'client'
       );
       res.json(contacts);
     } catch (error: any) {

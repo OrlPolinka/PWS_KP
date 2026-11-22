@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserPlus } from 'lucide-react';
 import { authService } from '../services/authService';
+import PasswordInput from '../components/PasswordInput';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -111,8 +112,7 @@ const Register = () => {
 
             <div>
               <label className="block text-sm font-medium mb-2">Пароль</label>
-              <input
-                type="password"
+              <PasswordInput
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
@@ -124,8 +124,7 @@ const Register = () => {
 
             <div>
               <label className="block text-sm font-medium mb-2">Подтвердите пароль</label>
-              <input
-                type="password"
+              <PasswordInput
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleChange}

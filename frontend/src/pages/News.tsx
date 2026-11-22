@@ -4,9 +4,11 @@ import api from '../services/api';
 import { News } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeMediaUrl } from '../lib/media';
+import { useActionDialog } from '../components/ActionDialog';
 
 const NewsPage = () => {
   const { user } = useAuth();
+  const { confirm, alert, dialog } = useActionDialog();
   const [news, setNews] = useState<News[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -50,12 +52,12 @@ const NewsPage = () => {
   };
 
   const deleteNews = async (id: string) => {
-    if (!window.confirm('Удалить эту новость?')) return;
+    if (!await confirm('Удалить эту новость?')) return;
     try {
       await api.delete(`/news/${id}`);
       await fetchNews();
     } catch (deleteError: any) {
-      window.alert(deleteError.response?.data?.error || 'Не удалось удалить новость');
+      await alert(deleteError.response?.data?.error || 'Не удалось удалить новость');
     }
   };
 
@@ -74,6 +76,7 @@ const NewsPage = () => {
 
   return (
     <div>
+      {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Новости</h1>
         {user?.role === 'admin' && <button onClick={() => setFormOpen(!formOpen)} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить новость</button>}

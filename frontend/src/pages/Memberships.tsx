@@ -4,6 +4,9 @@ import { CreditCard, Clock, CheckCircle, Plus, Pencil, Trash2, X } from 'lucide-
 import api from '../services/api';
 import { DanceStyle, MembershipType, Membership } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { getTodayDate, matchesSearchPrefix } from '../lib/search';
+import NumericInput from '../components/NumericInput';
+import { useActionDialog } from '../components/ActionDialog';
 
 type MembershipTypeForm = {
   name: string;
@@ -25,6 +28,7 @@ const getPaymentError = (error: unknown, fallback: string) => {
 
 const MembershipsPage = () => {
   const { user } = useAuth();
+  const { alert, dialog } = useActionDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [myMemberships, setMyMemberships] = useState<Membership[]>([]);
@@ -54,7 +58,7 @@ const MembershipsPage = () => {
   const [testCardNumber, setTestCardNumber] = useState('');
   const [testExpiryDate, setTestExpiryDate] = useState('');
   const [testCvc, setTestCvc] = useState('');
-  const [testZipCode, setTestZipCode] = useState('');
+  //const [testZipCode, setTestZipCode] = useState('');
   const [testPaymentError, setTestPaymentError] = useState('');
   const [testPaymentLoading, setTestPaymentLoading] = useState(false);
   const [extensionTarget, setExtensionTarget] = useState<Membership | null>(null);
@@ -62,6 +66,15 @@ const MembershipsPage = () => {
   const [extensionReason, setExtensionReason] = useState('');
   const [extensionError, setExtensionError] = useState('');
   const [extensionSubmitting, setExtensionSubmitting] = useState(false);
+  const today = getTodayDate();
+  const invalidMembershipDateRange = Boolean(myMembershipDateFrom && myMembershipDateTo && myMembershipDateFrom > myMembershipDateTo);
+  const invalidPastMembershipDate = Boolean(
+    (myMembershipDateFrom && myMembershipDateFrom < today) ||
+    (myMembershipDateTo && myMembershipDateTo < today)
+  );
+  const invalidVisitRange = Boolean(visitsFrom && visitsTo && Number(visitsFrom) > Number(visitsTo));
+  const invalidPriceRange = Boolean(priceFrom && priceTo && Number(priceFrom) > Number(priceTo));
+  const invalidDurationRange = Boolean(durationFrom && durationTo && Number(durationFrom) > Number(durationTo));
 
   useEffect(() => {
     fetchData();
@@ -95,8 +108,8 @@ const MembershipsPage = () => {
           }
           setTestPaymentId(null);
           setPaymentNotice(response.data.status === 'succeeded'
-            ? 'Тестовая оплата завершена. Абонемент добавлен в ваш профиль.'
-            : 'Тестовая оплата отменена. Абонемент не оформлен.');
+            ? 'Оплата завершена. Абонемент добавлен в ваш профиль.'
+            : 'Оплата отменена. Абонемент не оформлен.');
           if (response.data.status === 'succeeded') await fetchData();
           setSearchParams({}, { replace: true });
           return;
@@ -162,16 +175,16 @@ const MembershipsPage = () => {
       setTestCardNumber('');
       setTestExpiryDate('');
       setTestCvc('');
-      setTestZipCode('');
+      //setTestZipCode('');
       setSearchParams({}, { replace: true });
       if (outcome === 'complete') {
-        setPaymentNotice('Тестовая оплата завершена. Абонемент добавлен в ваш профиль.');
+        setPaymentNotice('Оплата завершена. Абонемент добавлен в ваш профиль.');
         await fetchData();
       } else {
-        setPaymentNotice('Тестовая оплата отменена. Абонемент не оформлен.');
+        setPaymentNotice('Оплата отменена. Абонемент не оформлен.');
       }
     } catch (error: unknown) {
-      setTestPaymentError(getPaymentError(error, 'Не удалось завершить тестовую оплату.'));
+      setTestPaymentError(getPaymentError(error, 'Не удалось завершить оплату.'));
     } finally {
       setTestPaymentLoading(false);
     }
@@ -182,7 +195,7 @@ const MembershipsPage = () => {
     setTestPaymentError('');
 
     const cardNumber = testCardNumber.replace(/\s/g, '');
-    if (!cardNumber || !testExpiryDate || !testCvc || !testZipCode.trim()) {
+    if (!cardNumber || !testExpiryDate || !testCvc){ //|| !testZipCode.trim()) {
       setTestPaymentError('Заполните все поля.');
       return;
     }
@@ -215,7 +228,7 @@ const MembershipsPage = () => {
       return;
     }
     if (cardNumber !== '4242424242424242') {
-      setTestPaymentError('Для теста используйте одну из указанных ниже карт.');
+      setTestPaymentError('Неподдерживаемая карта.');
       return;
     }
 
@@ -315,8 +328,28 @@ const MembershipsPage = () => {
       else await api.delete(`/membership-types/${type.id}`);
       await fetchData();
     } catch (updateError: any) {
-      window.alert(updateError.response?.data?.error || 'Не удалось изменить тип абонемента');
+      await alert(updateError.response?.data?.error || 'Не удалось изменить тип абонемента');
     }
+  };
+
+  const resetMyMembershipFilters = () => {
+    setMyMembershipSearch('');
+    setMyMembershipStatus('');
+    setMyMembershipDateFrom('');
+    setMyMembershipDateTo('');
+    setVisitsFrom('');
+    setVisitsTo('');
+  };
+
+  const resetMembershipTypeFilters = () => {
+    setTypeSearch('');
+    setTypeStyle('');
+    setPriceFrom('');
+    setPriceTo('');
+    setDurationFrom('');
+    setDurationTo('');
+    setVisitPolicy('');
+    setTypeStatus('active');
   };
 
   const formatDate = (dateString: string) => {
@@ -329,12 +362,12 @@ const MembershipsPage = () => {
   };
 
   const visibleMyMemberships = myMemberships.filter((membership) => {
-    const searchText = `${membership.membership_type?.name || membership.membership_type_name || ''}`.toLocaleLowerCase('ru');
     const startDate = membership.start_date.slice(0, 10);
     const endDate = membership.end_date.slice(0, 10);
     const remainingVisits = membership.remaining_visits;
     const status = membership.display_status || membership.status;
-    return (!myMembershipSearch || searchText.includes(myMembershipSearch.toLocaleLowerCase('ru'))) &&
+    return !invalidMembershipDateRange && !invalidPastMembershipDate && !invalidVisitRange &&
+      matchesSearchPrefix(myMembershipSearch, membership.membership_type?.name, membership.membership_type_name) &&
       (!myMembershipStatus || status === myMembershipStatus) &&
       (!myMembershipDateFrom || endDate >= myMembershipDateFrom) &&
       (!myMembershipDateTo || startDate <= myMembershipDateTo) &&
@@ -342,9 +375,9 @@ const MembershipsPage = () => {
       (!visitsTo || (remainingVisits !== null && remainingVisits <= Number(visitsTo)));
   });
   const visibleMembershipTypes = membershipTypes.filter((type) => {
-    const searchText = `${type.name} ${type.description || ''}`.toLocaleLowerCase('ru');
-    return (user?.role === 'admin' || type.is_active) &&
-      (!typeSearch || searchText.includes(typeSearch.toLocaleLowerCase('ru'))) &&
+    return !invalidPriceRange && !invalidDurationRange &&
+      (user?.role === 'admin' || type.is_active) &&
+      matchesSearchPrefix(typeSearch, type.name, type.description) &&
       (!typeStyle || String(type.dance_style_id || '') === typeStyle) &&
       (!priceFrom || type.price >= Number(priceFrom)) && (!priceTo || type.price <= Number(priceTo)) &&
       (!durationFrom || type.duration_days >= Number(durationFrom)) && (!durationTo || type.duration_days <= Number(durationTo)) &&
@@ -358,6 +391,7 @@ const MembershipsPage = () => {
 
   return (
     <div>
+      {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Абонементы</h1>
         {user?.role === 'admin' && <button onClick={openCreate} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить тип</button>}
@@ -375,18 +409,10 @@ const MembershipsPage = () => {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 id="test-payment-title" className="text-2xl font-bold">Оплата абонемента</h2>
-                <p className="mt-1 text-sm text-textSecondary">Тестовая оплата — деньги не списываются</p>
               </div>
               <button type="button" onClick={() => void finishTestPayment('cancel')} disabled={testPaymentLoading} className="rounded-lg px-3 py-1 text-textSecondary hover:bg-surface2 disabled:opacity-60" aria-label="Закрыть">
                 <X size={20} />
               </button>
-            </div>
-
-            <div className="mb-5 rounded-lg bg-surface2 p-4">
-              <h3 className="mb-2 font-semibold">Тестовые карты</h3>
-              <p className="text-sm">Успешная оплата: <strong>4242 4242 4242 4242</strong></p>
-              <p className="mt-1 text-sm">Отказ банка: <strong>4000 0000 0000 0002</strong></p>
-              <p className="mt-2 text-xs text-textSecondary">Введите дату в будущем, например 12/34, любой трёхзначный CVC и индекс.</p>
             </div>
 
             <form onSubmit={(event) => void submitTestPayment(event)} className="space-y-4">
@@ -434,18 +460,7 @@ const MembershipsPage = () => {
                   />
                 </label>
               </div>
-              <label className="block text-sm">
-                Почтовый индекс
-                <input
-                  required
-                  autoComplete="postal-code"
-                  maxLength={12}
-                  placeholder="220000"
-                  className="input mt-1"
-                  value={testZipCode}
-                  onChange={(event) => setTestZipCode(event.target.value)}
-                />
-              </label>
+              
               {testPaymentError && <p role="alert" className="text-sm text-error">{testPaymentError}</p>}
               <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <button type="button" onClick={() => void finishTestPayment('cancel')} disabled={testPaymentLoading} className="btn btn-secondary disabled:opacity-60">
@@ -477,9 +492,8 @@ const MembershipsPage = () => {
             <form onSubmit={(event) => void submitExtensionRequest(event)} className="space-y-4">
               <label className="block text-sm">
                 {extensionTarget.membership_visit_count != null ? 'Сколько занятий добавить' : 'На сколько дней продлить'}
-                <input
+                <NumericInput
                   required
-                  type="number"
                   min={1}
                   step={1}
                   className="input mt-1"
@@ -515,9 +529,9 @@ const MembershipsPage = () => {
       {formOpen && user?.role === 'admin' && <form onSubmit={saveType} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">{editingId ? 'Изменить тип' : 'Новый тип абонемента'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
         <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-        <label className="text-sm">Цена, BYN<input required type="number" min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
-        <label className="text-sm">Длительность, дней<input required type="number" min={1} className="input mt-1" value={form.duration_days} onChange={(event) => setForm({ ...form, duration_days: event.target.value })} /></label>
-        <label className="text-sm">Посещений<input type="number" min={1} placeholder="Без ограничений" className="input mt-1" value={form.visit_count} onChange={(event) => setForm({ ...form, visit_count: event.target.value })} /></label>
+        <label className="text-sm">Цена, BYN<NumericInput required min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
+        <label className="text-sm">Длительность, дней<NumericInput required min={1} className="input mt-1" value={form.duration_days} onChange={(event) => setForm({ ...form, duration_days: event.target.value })} /></label>
+        <label className="text-sm">Посещений<NumericInput min={1} placeholder="Без ограничений" className="input mt-1" value={form.visit_count} onChange={(event) => setForm({ ...form, visit_count: event.target.value })} /></label>
         <label className="text-sm sm:col-span-2">Описание<textarea rows={3} className="input mt-1" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
         {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
         <button type="submit" className="btn btn-primary sm:col-span-2">{editingId ? 'Сохранить изменения' : 'Создать тип'}</button>
@@ -529,11 +543,17 @@ const MembershipsPage = () => {
           <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm">Поиск по названию<input className="input mt-1" value={myMembershipSearch} onChange={(event) => setMyMembershipSearch(event.target.value)} /></label>
             <label className="text-sm">Статус<select className="input mt-1" value={myMembershipStatus} onChange={(event) => setMyMembershipStatus(event.target.value)}><option value="">Все статусы</option><option value="active">Активен</option><option value="expired">Истек</option><option value="paused">Приостановлен</option><option value="pending_extension">Ожидает продления</option><option value="cancelled">Отменен</option></select></label>
-            <label className="text-sm">Действует по дате от<input type="date" className="input mt-1" value={myMembershipDateFrom} onChange={(event) => setMyMembershipDateFrom(event.target.value)} /></label>
-            <label className="text-sm">Действует по дате до<input type="date" className="input mt-1" value={myMembershipDateTo} onChange={(event) => setMyMembershipDateTo(event.target.value)} /></label>
-            <label className="text-sm">Остаток посещений от<input type="number" min={0} className="input mt-1" value={visitsFrom} onChange={(event) => setVisitsFrom(event.target.value)} /></label>
-            <label className="text-sm">Остаток посещений до<input type="number" min={0} className="input mt-1" value={visitsTo} onChange={(event) => setVisitsTo(event.target.value)} /></label>
-            <p className="text-sm text-textSecondary sm:col-span-2 lg:col-span-3">Найдено абонементов: {visibleMyMemberships.length}</p>
+            <label className="text-sm">Действует по дате от<input type="date" min={today} max={myMembershipDateTo >= today ? myMembershipDateTo : undefined} className="input mt-1" value={myMembershipDateFrom} onChange={(event) => setMyMembershipDateFrom(event.target.value)} /></label>
+            <label className="text-sm">Действует по дате до<input type="date" min={myMembershipDateFrom >= today ? myMembershipDateFrom : today} className="input mt-1" value={myMembershipDateTo} onChange={(event) => setMyMembershipDateTo(event.target.value)} /></label>
+            <label className="text-sm">Остаток посещений от<NumericInput min={0} max={visitsTo || undefined} className="input mt-1" value={visitsFrom} onChange={(event) => setVisitsFrom(event.target.value)} /></label>
+            <label className="text-sm">Остаток посещений до<NumericInput min={visitsFrom || 0} className="input mt-1" value={visitsTo} onChange={(event) => setVisitsTo(event.target.value)} /></label>
+            {invalidPastMembershipDate && <p role="alert" className="text-error sm:col-span-2 lg:col-span-3">Нельзя выбрать прошедшую дату.</p>}
+            {invalidMembershipDateRange && <p role="alert" className="text-error sm:col-span-2 lg:col-span-3">Дата «от» не может быть позже даты «до».</p>}
+            {invalidVisitRange && <p role="alert" className="text-error sm:col-span-2 lg:col-span-3">Количество посещений «от» не может быть больше значения «до».</p>}
+            <div className="flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-3">
+              <p className="text-sm text-textSecondary">Найдено абонементов: {visibleMyMemberships.length}</p>
+              <button type="button" onClick={resetMyMembershipFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {visibleMyMemberships.length === 0 ? <p className="text-textSecondary">Абонементы по выбранным критериям не найдены</p> : visibleMyMemberships.map((membership) => (
@@ -592,11 +612,15 @@ const MembershipsPage = () => {
         <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} /></label>
           <label className="text-sm">Направление<select className="input mt-1" value={typeStyle} onChange={(event) => setTypeStyle(event.target.value)}><option value="">Все направления</option>{danceStyles.map((style) => <option key={style.id} value={style.id}>{style.name}</option>)}</select></label>
-          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Цена от<input type="number" min={0} className="input mt-1" value={priceFrom} onChange={(event) => setPriceFrom(event.target.value)} /></label><label className="text-sm">Цена до<input type="number" min={0} className="input mt-1" value={priceTo} onChange={(event) => setPriceTo(event.target.value)} /></label></div>
-          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Дней от<input type="number" min={1} className="input mt-1" value={durationFrom} onChange={(event) => setDurationFrom(event.target.value)} /></label><label className="text-sm">Дней до<input type="number" min={1} className="input mt-1" value={durationTo} onChange={(event) => setDurationTo(event.target.value)} /></label></div>
+          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Цена от<NumericInput min={0} max={priceTo || undefined} className="input mt-1" value={priceFrom} onChange={(event) => setPriceFrom(event.target.value)} /></label><label className="text-sm">Цена до<NumericInput min={priceFrom || 0} className="input mt-1" value={priceTo} onChange={(event) => setPriceTo(event.target.value)} /></label></div>
+          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Дней от<NumericInput min={1} max={durationTo || undefined} className="input mt-1" value={durationFrom} onChange={(event) => setDurationFrom(event.target.value)} /></label><label className="text-sm">Дней до<NumericInput min={durationFrom || 1} className="input mt-1" value={durationTo} onChange={(event) => setDurationTo(event.target.value)} /></label></div>
+          {(invalidPriceRange || invalidDurationRange) && <p role="alert" className="text-error sm:col-span-2 lg:col-span-4">Значение «от» не может быть больше значения «до».</p>}
           <label className="text-sm">Посещения<select className="input mt-1" value={visitPolicy} onChange={(event) => setVisitPolicy(event.target.value)}><option value="">Любой вариант</option><option value="limited">С лимитом</option><option value="unlimited">Безлимитный</option></select></label>
           {user?.role === 'admin' && <label className="text-sm">Статус<select className="input mt-1" value={typeStatus} onChange={(event) => setTypeStatus(event.target.value)}><option value="active">Активные</option><option value="archived">В архиве</option><option value="all">Все</option></select></label>}
-          <p className="pb-2 text-sm text-textSecondary sm:self-end">Найдено типов: {visibleMembershipTypes.length}</p>
+          <div className="flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-4">
+            <p className="text-sm text-textSecondary">Найдено типов: {visibleMembershipTypes.length}</p>
+            <button type="button" onClick={resetMembershipTypeFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {visibleMembershipTypes.length === 0 ? <p className="text-textSecondary">Типы абонементов по выбранным критериям не найдены</p> : visibleMembershipTypes.map((type) => (

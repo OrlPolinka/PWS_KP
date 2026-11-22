@@ -5,6 +5,8 @@ import api from '../services/api';
 import { ScheduleListItem, TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { isUploadedMedia, normalizeMediaUrl } from '../lib/media';
+import NumericInput from '../components/NumericInput';
+import { useActionDialog } from '../components/ActionDialog';
 
 const weekdays = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
@@ -14,6 +16,7 @@ const mediaUrl = (item: NonNullable<TrainerListItem['gallery']>[number]) =>
 const TrainerProfilePage = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const { confirm, dialog } = useActionDialog();
   const isOwnProfile = !id && user?.role === 'trainer';
   const [profile, setProfile] = useState<TrainerListItem | null>(null);
   const [schedules, setSchedules] = useState<ScheduleListItem[]>([]);
@@ -109,7 +112,7 @@ const TrainerProfilePage = () => {
   };
 
   const removeMedia = async (url: string, kind: 'photo' | 'gallery') => {
-    if (!profile || !window.confirm('Удалить этот медиафайл?')) return;
+    if (!profile || !await confirm('Удалить этот медиафайл?')) return;
     setSaving(true);
     setError('');
     try {
@@ -123,14 +126,15 @@ const TrainerProfilePage = () => {
   };
 
   if (loading) return <div className="py-8 text-center">Загрузка...</div>;
-  if (!profile) return <div className="card text-center"><p>{error || 'Профиль не найден'}</p><Link to="/trainers" className="mt-4 inline-block text-primary hover:underline">Вернуться к тренерам</Link></div>;
+  if (!profile) return <div className="card text-center"><p>{error || 'Профиль не найден'}</p><Link to={user?.role === 'trainer' ? '/dashboard' : '/trainers'} className="mt-4 inline-block text-primary hover:underline">{user?.role === 'trainer' ? 'На главную' : 'Вернуться к тренерам'}</Link></div>;
 
   const gallery = profile.gallery || [];
   const photoUrl = profile.photo_url || profile.user_photo_url;
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Link to="/trainers" className="mb-6 inline-flex items-center gap-2 text-sm text-primary hover:underline"><ArrowLeft size={16} />К списку тренеров</Link>
+      {dialog}
+      <Link to={user?.role === 'trainer' ? '/dashboard' : '/trainers'} className="mb-6 inline-flex items-center gap-2 text-sm text-primary hover:underline"><ArrowLeft size={16} />{user?.role === 'trainer' ? 'На главную' : 'К списку тренеров'}</Link>
       <header className="mb-8 flex flex-wrap items-center gap-5">
         {photoUrl ? <img src={normalizeMediaUrl(photoUrl)} alt={profile.full_name} className="h-24 w-24 rounded-full object-cover" /> : <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/20"><User size={36} className="text-primary" /></div>}
         <div>
@@ -170,7 +174,7 @@ const TrainerProfilePage = () => {
         <label className="block text-sm">Направление<input className="input mt-1" value={profile.specialization || ''} onChange={(event) => setProfile({ ...profile, specialization: event.target.value })} /></label>
         <label className="block text-sm">О себе<textarea rows={5} className="input mt-1" value={profile.bio || ''} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block text-sm">Опыт, лет<input type="number" min={0} className="input mt-1" value={profile.experience_years ?? ''} onChange={(event) => setProfile({ ...profile, experience_years: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>
+          <label className="block text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={profile.experience_years ?? ''} onChange={(event) => setProfile({ ...profile, experience_years: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>
           <label className="block text-sm">Образование<input className="input mt-1" value={profile.education || ''} onChange={(event) => setProfile({ ...profile, education: event.target.value })} /></label>
         </div>
         <label className="block text-sm">Достижения<textarea rows={3} className="input mt-1" value={profile.achievements || ''} onChange={(event) => setProfile({ ...profile, achievements: event.target.value })} /></label>

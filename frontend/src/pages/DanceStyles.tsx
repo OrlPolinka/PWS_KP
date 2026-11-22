@@ -4,9 +4,12 @@ import { Music, Calendar, Plus, Pencil, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { matchesSearchPrefix } from '../lib/search';
+import { useActionDialog } from '../components/ActionDialog';
 
 const DanceStylesPage = () => {
   const { user } = useAuth();
+  const { confirm, alert, dialog } = useActionDialog();
   const [styles, setStyles] = useState<DanceStyle[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -67,18 +70,23 @@ const DanceStylesPage = () => {
   };
 
   const deleteStyle = async (style: DanceStyle) => {
-    if (!window.confirm(`Полностью удалить стиль «${style.name}» вместе со связанными занятиями, бронированиями и посещениями?`)) return;
+    if (!await confirm(`Полностью удалить стиль «${style.name}» вместе со связанными занятиями, бронированиями и посещениями?`)) return;
     try {
       await api.delete(`/dance-styles/${style.id}`);
       await fetchStyles();
     } catch (deleteError: any) {
-      window.alert(deleteError.response?.data?.error || 'Не удалось удалить стиль');
+      await alert(deleteError.response?.data?.error || 'Не удалось удалить стиль');
     }
   };
 
+  const resetFilters = () => {
+    setSearch('');
+    setDifficultyFilter('');
+    setStatusFilter('active');
+  };
+
   const visibleStyles = styles.filter((style) => {
-    const searchText = `${style.name} ${style.description || ''}`.toLocaleLowerCase('ru');
-    return (!search || searchText.includes(search.toLocaleLowerCase('ru'))) &&
+    return matchesSearchPrefix(search, style.name, style.description) &&
       (!difficultyFilter || style.difficulty === difficultyFilter) &&
       (user?.role !== 'admin' || statusFilter === 'all' || (statusFilter === 'active' ? style.is_active : !style.is_active));
   });
@@ -89,6 +97,7 @@ const DanceStylesPage = () => {
 
   return (
     <div>
+      {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Стили танцев</h1>
         {user?.role === 'admin' && <button onClick={openCreate} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить стиль</button>}
@@ -107,7 +116,10 @@ const DanceStylesPage = () => {
         <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <label className="text-sm">Сложность<select className="input mt-1" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}><option value="">Любая сложность</option><option value="beginner">Начальная</option><option value="intermediate">Средняя</option><option value="advanced">Продвинутая</option></select></label>
         {user?.role === 'admin' && <label className="text-sm">Статус<select className="input mt-1" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="active">Активные</option><option value="archived">В архиве</option><option value="all">Все</option></select></label>}
-        <p className="pb-2 text-sm text-textSecondary sm:self-end">Найдено стилей: {visibleStyles.length}</p>
+        <div className="flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-4">
+          <p className="text-sm text-textSecondary">Найдено стилей: {visibleStyles.length}</p>
+          <button type="button" onClick={resetFilters} className="text-sm text-primary hover:underline">Сбросить фильтры</button>
+        </div>
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

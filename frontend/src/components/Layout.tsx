@@ -25,7 +25,7 @@ const Layout = () => {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'trainer', 'client'] },
     { path: '/schedule', icon: Calendar, label: 'Расписание', roles: ['admin', 'trainer', 'client'] },
-    { path: '/trainers', icon: Users, label: 'Тренеры', roles: ['admin', 'trainer', 'client'] },
+    { path: '/trainers', icon: Users, label: 'Тренеры', roles: ['admin', 'client'] },
     { path: '/styles', icon: User, label: 'Стили танцев', roles: ['admin', 'trainer', 'client'] },
     { path: '/memberships', icon: CreditCard, label: 'Абонементы', roles: ['admin', 'client'] },
     { path: '/membership-extension-requests', icon: Clock, label: 'Запросы на продление', roles: ['admin'] },

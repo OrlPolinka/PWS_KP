@@ -6,6 +6,7 @@ import { Message } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeMediaUrl } from '../lib/media';
 import ChatbotAdminPanel from '../components/ChatbotAdminPanel';
+import { useActionDialog } from '../components/ActionDialog';
 
 type UserRole = 'admin' | 'trainer' | 'client';
 
@@ -48,6 +49,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const ChatPage = () => {
   const { user } = useAuth();
+  const { confirm, dialog } = useActionDialog();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [selectedUser, setSelectedUser] = useState<ChatContact | null>(null);
@@ -213,6 +215,11 @@ const ChatPage = () => {
     setFaqSearch('');
   };
 
+  const resetContactFilters = () => {
+    setSearch('');
+    setRoleFilter('');
+  };
+
   useEffect(() => {
     botMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [botExchanges.length, selectedBot]);
@@ -255,7 +262,7 @@ const ChatPage = () => {
   };
 
   const deleteMessage = async (message: Message) => {
-    if (!window.confirm('Удалить это сообщение?')) return;
+    if (!await confirm('Удалить это сообщение?')) return;
     setChatError('');
     try {
       await api.delete(`/messages/${message.id}`);
@@ -282,7 +289,6 @@ const ChatPage = () => {
   };
 
   const renderContact = (contact: ChatContact, conversation?: Conversation) => {
-    const profilePath = getProfilePath(contact);
     const selected = selectedUser?.id === contact.id;
     const avatar = contact.photo_url ? (
       <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -295,48 +301,27 @@ const ChatPage = () => {
     );
 
     return (
-      <div
+      <button
         key={contact.id}
+        type="button"
+        onClick={() => selectUser(contact)}
         className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors ${
           selected ? 'bg-primary text-white' : 'hover:bg-surface2'
         }`}
       >
-        {profilePath ? (
-          <Link
-            to={profilePath}
-            aria-label={`Открыть профиль: ${contact.full_name}`}
-            title={contact.role === 'trainer' ? 'Открыть страницу тренера' : 'Открыть профиль пользователя'}
-            className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            {avatar}
-          </Link>
-        ) : avatar}
+        {avatar}
         <span className="min-w-0 flex-1">
-          {profilePath ? (
-            <Link to={profilePath} className="block truncate font-medium hover:underline">
-              {contact.full_name}
-            </Link>
-          ) : (
-            <button type="button" onClick={() => selectUser(contact)} className="block max-w-full truncate text-left font-medium">
-              {contact.full_name}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => selectUser(contact)}
-            className={`block max-w-full truncate text-left text-sm ${
-              selected ? 'text-white/70' : 'text-textSecondary'
-            }`}
-          >
+          <span className="block truncate font-medium">{contact.full_name}</span>
+          <span className={`block truncate text-left text-sm ${selected ? 'text-white/70' : 'text-textSecondary'}`}>
             {conversation?.last_message || roleLabels[contact.role]}
-          </button>
+          </span>
         </span>
         {conversation && conversation.unread_count > 0 && (
           <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white">
             {conversation.unread_count}
           </span>
         )}
-      </div>
+      </button>
     );
   };
 
@@ -378,6 +363,7 @@ const ChatPage = () => {
 
   return (
     <div>
+      {dialog}
       <h1 className="mb-6 text-3xl font-bold">Чат</h1>
       {user?.role === 'admin' && <ChatbotAdminPanel />}
 
@@ -406,9 +392,12 @@ const ChatPage = () => {
               <option value="">Все роли</option>
               <option value="admin">Администраторы</option>
               <option value="trainer">Тренеры</option>
-              <option value="client">Клиенты</option>
+              {user?.role !== 'client' && <option value="client">Клиенты</option>}
             </select>
           </label>
+          <button type="button" onClick={resetContactFilters} className="mb-4 text-left text-sm text-primary hover:underline">
+            Сбросить фильтры
+          </button>
 
           {sidebarError && <p role="alert" className="mb-3 text-sm text-error">{sidebarError}</p>}
 
@@ -538,6 +527,9 @@ const ChatPage = () => {
                   Начните вводить вопрос — покажем похожие варианты из базы ответов.
                 </span>
               </label>
+              <button type="button" onClick={() => setFaqSearch('')} className="mt-2 text-sm text-primary hover:underline">
+                Сбросить поиск вопросов
+              </button>
             </>
           ) : selectedUser ? (
             <>

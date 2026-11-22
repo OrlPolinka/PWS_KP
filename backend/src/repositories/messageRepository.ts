@@ -2,7 +2,7 @@ import { query } from '../config/database';
 import { Message } from '../types';
 
 export class MessageRepository {
-  static async getContacts(userId: string, search: string, role?: string): Promise<Array<{
+  static async getContacts(userId: string, search: string, role?: string, excludeClients = false): Promise<Array<{
     id: string;
     full_name: string;
     role: string;
@@ -15,11 +15,19 @@ export class MessageRepository {
        LEFT JOIN trainers ON trainers.user_id = users.id
        WHERE users.id <> $1
          AND users.is_active = true
-         AND users.full_name ILIKE $2
+         AND (
+           LEFT(LOWER(users.full_name), LENGTH($2)) = LOWER($2)
+           OR EXISTS (
+             SELECT 1
+             FROM regexp_split_to_table(LOWER(users.full_name), '[^[:alnum:]]+') AS search_words(word)
+             WHERE LEFT(search_words.word, LENGTH($2)) = LOWER($2)
+           )
+         )
          AND ($3::text IS NULL OR users.role = $3)
+         AND (NOT $4::boolean OR users.role <> 'client')
        ORDER BY users.full_name
        LIMIT 50`,
-      [userId, `%${search}%`, role || null]
+      [userId, search, role || null, excludeClients]
     );
     return result.rows;
   }
@@ -97,7 +105,7 @@ export class MessageRepository {
     return result.rows.reverse();
   }
 
-  static async getUserConversations(userId: string): Promise<any[]> {
+  static async getUserConversations(userId: string, excludeClients = false): Promise<any[]> {
     const result = await query(
       `WITH conversation_list AS (
          SELECT CASE WHEN sender_id = $1 THEN receiver_id ELSE sender_id END AS other_user_id,
@@ -133,8 +141,9 @@ export class MessageRepository {
            AND receiver_id = $1
            AND is_read = false
        ) unread ON TRUE
+       WHERE NOT $2::boolean OR other_user.role <> 'client'
        ORDER BY conversations.last_message_time DESC`,
-      [userId]
+      [userId, excludeClients]
     );
     return result.rows;
   }

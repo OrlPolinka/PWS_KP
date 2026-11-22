@@ -2,6 +2,16 @@ import { TrainerRepository, UserRepository } from '../repositories';
 import { TrainerProfile } from '../types';
 
 export class TrainerService {
+  private static validateExperience(experienceYears: number | null | undefined): void {
+    if (
+      experienceYears !== undefined &&
+      experienceYears !== null &&
+      (!Number.isInteger(experienceYears) || experienceYears < 0 || experienceYears > 70)
+    ) {
+      throw new Error('Опыт тренера должен быть целым числом от 0 до 70 лет');
+    }
+  }
+
   static async getTrainerById(id: string, includeUnpublished = false): Promise<TrainerProfile> {
     const trainer = await TrainerRepository.findById(id);
     if (!trainer || !trainer.is_active || (!includeUnpublished && !trainer.is_published)) {
@@ -23,6 +33,7 @@ export class TrainerService {
   }
 
   static async createTrainer(userId: string, data: Partial<TrainerProfile>): Promise<TrainerProfile> {
+    this.validateExperience(data.experience_years);
     const user = await UserRepository.findById(userId);
     if (!user) {
       throw new Error('User not found');
@@ -57,6 +68,7 @@ export class TrainerService {
   }
 
   static async updateTrainer(id: string, data: Partial<TrainerProfile>): Promise<TrainerProfile> {
+    this.validateExperience(data.experience_years);
     const trainer = await TrainerRepository.findById(id);
     if (!trainer) {
       throw new Error('Trainer not found');
