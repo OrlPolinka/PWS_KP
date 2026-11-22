@@ -93,4 +93,13 @@ export class MembershipTypeService {
 
     return updated;
   }
+
+  static async permanentlyDeleteMembershipType(id: number): Promise<void> {
+    const type = await MembershipTypeRepository.findById(id);
+    if (!type) throw new Error('Membership type not found');
+    if (type.is_active) throw new Error('Archive the membership type before deleting it permanently');
+
+    const deleted = await MembershipTypeRepository.delete(id);
+    if (!deleted) throw new Error('Failed to permanently delete membership type');
+  }
 }

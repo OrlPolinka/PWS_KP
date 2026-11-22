@@ -47,3 +47,19 @@ test('updateTrainer accepts the 70-year maximum', async () => {
   assert.equal(result.experience_years, 70);
   assert.equal(updatedData.experience_years, 70);
 });
+
+test('deleteTrainer only permanently deletes a trainer profile after it is archived', async () => {
+  let deletedId;
+  stub(TrainerRepository, 'findById', async () => ({ id: 'trainer-id', is_published: true }));
+  stub(TrainerRepository, 'delete', async (id) => {
+    deletedId = id;
+    return true;
+  });
+
+  await assert.rejects(TrainerService.deleteTrainer('trainer-id'), /Сначала переместите профиль тренера в архив/);
+  assert.equal(deletedId, undefined);
+
+  stub(TrainerRepository, 'findById', async () => ({ id: 'trainer-id', is_published: false }));
+  await TrainerService.deleteTrainer('trainer-id');
+  assert.equal(deletedId, 'trainer-id');
+});

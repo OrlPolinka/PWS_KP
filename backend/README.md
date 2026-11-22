@@ -127,6 +127,7 @@ psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_p
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_stripe_payment_currency.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_extension_requests.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_client_checkin_codes.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261122_publish_trainer_profiles.sql
 ```
 The weekly migration preserves booked class dates while converting schedule entries to weekly slots (Monday = 1, Sunday = 7).
 
@@ -171,7 +172,8 @@ npm start
 - `GET /api/trainers/:id` - View a published trainer profile
 - `POST /api/trainers` - Create trainer profile (Admin)
 - `PUT /api/trainers/:id` - Update trainer profile (Admin)
-- `DELETE /api/trainers/:id` - Permanently delete trainer, account, schedules, bookings and attendance (Admin)
+- `PATCH /api/trainers/:id/published` - Publish or archive a trainer profile (Admin)
+- `DELETE /api/trainers/:id` - Permanently delete an archived trainer, account, schedules, bookings and attendance (Admin)
 - `GET /api/trainers/me/profile` - Get own profile (Trainer)
 - `PATCH /api/trainers/me/profile` - Edit own profile (Trainer)
 - `POST /api/trainers/me/media` - Upload up to 8 images/videos, 25 MB each (Trainer)
@@ -190,13 +192,16 @@ npm start
 - `PUT /api/membership-types/:id` - Update membership type (Admin)
 - `DELETE /api/membership-types/:id` - Archive membership type (Admin)
 - `PATCH /api/membership-types/:id/active` - Restore archived type (Admin)
+- `DELETE /api/membership-types/:id/permanent` - Permanently delete an archived type (Admin; blocked while memberships reference it)
 - Deletion archives a type so existing memberships retain their references.
 
 ### Dance Styles
 - `GET /api/dance-styles` - Get active styles (Admin also sees archived styles)
 - `POST /api/dance-styles` - Create style (Admin)
 - `PUT /api/dance-styles/:id` - Update style (Admin)
-- `DELETE /api/dance-styles/:id` - Permanently delete style, related schedules, bookings and attendance (Admin)
+- `DELETE /api/dance-styles/:id` - Archive style without removing schedules or history (Admin)
+- `PATCH /api/dance-styles/:id/active` - Restore an archived style (Admin)
+- `DELETE /api/dance-styles/:id/permanent` - Permanently delete an archived style and related schedules, bookings and attendance (Admin)
 
 ### Memberships
 - `GET /api/memberships/my` - Get my memberships (Client)

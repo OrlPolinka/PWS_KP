@@ -5,6 +5,7 @@ import { News } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeMediaUrl } from '../lib/media';
 import { useActionDialog } from '../components/ActionDialog';
+import Modal from '../components/Modal';
 
 const NewsPage = () => {
   const { user } = useAuth();
@@ -61,6 +62,14 @@ const NewsPage = () => {
     }
   };
 
+  const openCreateForm = () => {
+    setTitle('');
+    setContent('');
+    setImage(null);
+    setError('');
+    setFormOpen(true);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
@@ -79,20 +88,22 @@ const NewsPage = () => {
       {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Новости</h1>
-        {user?.role === 'admin' && <button onClick={() => setFormOpen(!formOpen)} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить новость</button>}
+        {user?.role === 'admin' && <button type="button" onClick={openCreateForm} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить новость</button>}
       </div>
 
       {formOpen && user?.role === 'admin' && (
-        <form onSubmit={createNews} className="card mb-8 space-y-4">
-          <label className="block text-sm">Заголовок<input required maxLength={255} className="input mt-1" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <label className="block text-sm">Текст новости<textarea required rows={5} className="input mt-1" value={content} onChange={(event) => setContent(event.target.value)} /></label>
-          <label className="block text-sm">Изображение новости
-            <input type="file" accept="image/jpeg,image/png,image/webp" className="input mt-1" onChange={(event) => setImage(event.target.files?.[0] || null)} />
-            <span className="mt-1 block text-xs text-textSecondary">JPEG, PNG или WebP, до 5 МБ.</span>
-          </label>
-          {error && <p role="alert" className="text-error">{error}</p>}
-          <button type="submit" className="btn btn-primary">Опубликовать</button>
-        </form>
+        <Modal title="Новая новость" onClose={() => setFormOpen(false)}>
+          <form onSubmit={createNews} className="space-y-4">
+            <label className="block text-sm">Заголовок<input required maxLength={255} className="input mt-1" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+            <label className="block text-sm">Текст новости<textarea required rows={5} className="input mt-1" value={content} onChange={(event) => setContent(event.target.value)} /></label>
+            <label className="block text-sm">Изображение новости
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="input mt-1" onChange={(event) => setImage(event.target.files?.[0] || null)} />
+              <span className="mt-1 block text-xs text-textSecondary">JPEG, PNG или WebP, до 5 МБ.</span>
+            </label>
+            {error && <p role="alert" className="text-error">{error}</p>}
+            <button type="submit" className="btn btn-primary">Опубликовать</button>
+          </form>
+        </Modal>
       )}
 
       <div className="grid grid-cols-1 gap-6">

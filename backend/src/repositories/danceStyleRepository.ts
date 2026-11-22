@@ -14,11 +14,13 @@ export class DanceStyleRepository {
     return result.rows[0] || null;
   }
 
-  static async findAll(): Promise<DanceStyleRecord[]> {
+  static async findAll(includeArchived = false): Promise<DanceStyleRecord[]> {
     const result = await query(
       `SELECT id, name, description, difficulty, is_active
-       FROM dance_styles WHERE is_active = TRUE
-       ORDER BY name`
+       FROM dance_styles
+       WHERE ($1::boolean OR is_active = TRUE)
+       ORDER BY name`,
+      [includeArchived]
     );
     return result.rows;
   }
@@ -57,6 +59,12 @@ export class DanceStyleRepository {
     const client = await getTransactionClient();
     try {
       await client.query('BEGIN');
+      const style = await client.query(
+        'SELECT is_active FROM dance_styles WHERE id = $1 FOR UPDATE',
+        [id]
+      );
+      if (!style.rowCount) throw new Error('Стиль танца не найден');
+      if (style.rows[0].is_active) throw new Error('Сначала переместите стиль в архив');
       await client.query(
         `DELETE FROM attendance WHERE booking_id IN (
            SELECT b.id FROM bookings b
@@ -76,5 +84,15 @@ export class DanceStyleRepository {
     } finally {
       client.release();
     }
+  }
+
+  static async setActive(id: number, isActive: boolean): Promise<DanceStyleRecord | null> {
+    const result = await query(
+      `UPDATE dance_styles SET is_active = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, name, description, difficulty, is_active`,
+      [isActive, id]
+    );
+    return result.rows[0] || null;
   }
 }

@@ -101,6 +101,9 @@ export class TrainerService {
     if (!trainer) {
       throw new Error('Trainer not found');
     }
+    if (trainer.is_published) {
+      throw new Error('Сначала переместите профиль тренера в архив');
+    }
 
     await TrainerRepository.delete(id);
   }
@@ -155,6 +158,9 @@ export class TrainerService {
   }
 
   static async setTrainerPublished(id: string, isPublished: boolean): Promise<TrainerProfile> {
+    if (typeof isPublished !== 'boolean') {
+      throw new Error('Некорректный статус публикации профиля тренера');
+    }
     const trainer = await TrainerRepository.findById(id);
     if (!trainer) {
       throw new Error('Trainer not found');

@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Bot, ChevronDown, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 import { useActionDialog } from './ActionDialog';
+import Modal from './Modal';
 
 interface ChatbotFaq {
   id: number;
@@ -29,6 +30,7 @@ const ChatbotAdminPanel = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
 
   const fetchFaqs = useCallback(async () => {
     try {
@@ -52,6 +54,14 @@ const ChatbotAdminPanel = () => {
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setFormOpen(false);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setError('');
+    setNotice('');
+    setFormOpen(true);
   };
 
   const saveFaq = async (event: FormEvent<HTMLFormElement>) => {
@@ -99,24 +109,13 @@ const ChatbotAdminPanel = () => {
   return (
     <>
     {dialog}
-    <details className="card group mb-6">
-      <summary className="flex cursor-pointer list-none items-center gap-3">
-        <Bot className="shrink-0 text-primary" size={24} />
-        <span className="min-w-0 flex-1">
-          <span className="block font-bold">База ответов чат-бота</span>
-          <span className="block text-sm text-textSecondary">
-            Добавляйте вопросы и ответы, которые клиенты смогут найти в чате.
-          </span>
-        </span>
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-          {faqs.length}
-        </span>
-        <ChevronDown size={18} className="shrink-0 text-textSecondary transition-transform group-open:rotate-180" />
-      </summary>
-
-      <div className="mt-6 grid gap-6 border-t border-surface2 pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    {formOpen && (
+      <Modal
+        title={editingId === null ? 'Новый вопрос' : 'Редактирование вопроса'}
+        onClose={resetForm}
+        maxWidthClass="max-w-3xl"
+      >
         <form onSubmit={saveFaq} className="space-y-4">
-          <h2 className="text-lg font-semibold">{editingId === null ? 'Новый вопрос' : 'Редактирование вопроса'}</h2>
           <label className="block text-sm font-medium">
             Вопрос
             <input
@@ -163,25 +162,45 @@ const ChatbotAdminPanel = () => {
             />
             Показывать клиентам
           </label>
-
           {error && <p role="alert" className="text-sm text-error">{error}</p>}
-          {notice && <p role="status" className="text-sm text-green-700">{notice}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={saving} className="btn btn-primary flex items-center gap-2 disabled:opacity-60">
               {editingId === null ? <Plus size={18} /> : <Save size={18} />}
               {saving ? 'Сохранение...' : editingId === null ? 'Добавить вопрос' : 'Сохранить'}
             </button>
-            {editingId !== null && (
-              <button type="button" onClick={resetForm} className="btn btn-secondary flex items-center gap-2">
-                <X size={18} />
-                Отмена
-              </button>
-            )}
+            <button type="button" onClick={resetForm} className="btn btn-secondary flex items-center gap-2" disabled={saving}>
+              <X size={18} />
+              Отмена
+            </button>
           </div>
         </form>
+      </Modal>
+    )}
+    <details className="card group mb-6">
+      <summary className="flex cursor-pointer list-none items-center gap-3">
+        <Bot className="shrink-0 text-primary" size={24} />
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold">База ответов чат-бота</span>
+          <span className="block text-sm text-textSecondary">
+            Добавляйте вопросы и ответы, которые клиенты смогут найти в чате.
+          </span>
+        </span>
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+          {faqs.length}
+        </span>
+        <ChevronDown size={18} className="shrink-0 text-textSecondary transition-transform group-open:rotate-180" />
+      </summary>
 
+      <div className="mt-6 border-t border-surface2 pt-6">
+        {!formOpen && error && <p role="alert" className="mb-4 text-sm text-error">{error}</p>}
+        {notice && <p role="status" className="mb-4 text-sm text-green-700">{notice}</p>}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Вопросы и ответы</h2>
+          <button type="button" onClick={openCreateForm} className="btn btn-primary flex items-center gap-2">
+            <Plus size={18} />Добавить вопрос
+          </button>
+        </div>
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Вопросы и ответы</h2>
           {loading ? (
             <p className="text-sm text-textSecondary">Загрузка...</p>
           ) : faqs.length === 0 ? (
@@ -213,6 +232,7 @@ const ChatbotAdminPanel = () => {
                           setEditingId(faq.id);
                           setError('');
                           setNotice('');
+                          setFormOpen(true);
                         }}
                         className="rounded-lg p-2 text-textSecondary hover:bg-surface2 hover:text-primary"
                         aria-label={`Редактировать: ${faq.question}`}

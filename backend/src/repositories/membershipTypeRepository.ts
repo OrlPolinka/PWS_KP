@@ -49,7 +49,7 @@ export class MembershipTypeRepository {
   }
 
   static async delete(id: number): Promise<boolean> {
-    const result = await query('DELETE FROM membership_types WHERE id = $1', [id]);
+    const result = await query('DELETE FROM membership_types WHERE id = $1 AND is_active = FALSE', [id]);
     return (result.rowCount || 0) > 0;
   }
 

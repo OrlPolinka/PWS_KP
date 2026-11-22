@@ -8,6 +8,7 @@ router.get('/', authenticate, MembershipTypeController.getAllMembershipTypes);
 router.get('/:id', authenticate, MembershipTypeController.getMembershipTypeById);
 router.post('/', authenticate, authorize('admin'), MembershipTypeController.createMembershipType);
 router.put('/:id', authenticate, authorize('admin'), MembershipTypeController.updateMembershipType);
+router.delete('/:id/permanent', authenticate, authorize('admin'), MembershipTypeController.permanentlyDeleteMembershipType);
 router.delete('/:id', authenticate, authorize('admin'), MembershipTypeController.deleteMembershipType);
 router.patch('/:id/active', authenticate, authorize('admin'), MembershipTypeController.setMembershipTypeActive);
 

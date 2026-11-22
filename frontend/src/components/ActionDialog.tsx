@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 type DialogRequest = {
   message: string;
   mode: 'confirm' | 'alert';
+  confirmLabel?: string;
   resolve: (accepted: boolean) => void;
 };
 
@@ -11,8 +12,8 @@ export const useActionDialog = () => {
   const titleId = useId();
   const messageId = useId();
 
-  const confirm = (message: string): Promise<boolean> => new Promise((resolve) => {
-    setRequest({ message, mode: 'confirm', resolve });
+  const confirm = (message: string, confirmLabel = 'Удалить'): Promise<boolean> => new Promise((resolve) => {
+    setRequest({ message, mode: 'confirm', confirmLabel, resolve });
   });
 
   const alert = (message: string): Promise<void> => new Promise((resolve) => {
@@ -53,7 +54,7 @@ export const useActionDialog = () => {
             </button>
           )}
           <button type="button" autoFocus onClick={() => close(true)} className="btn btn-primary">
-            {request.mode === 'confirm' ? 'Удалить' : 'Понятно'}
+            {request.mode === 'confirm' ? request.confirmLabel : 'Понятно'}
           </button>
         </div>
       </section>

@@ -34,6 +34,7 @@ psql -U postgres -d dance_studio -f migrations/20261017_stripe_payment_currency.
 psql -U postgres -d dance_studio -f migrations/20261017_membership_extension_requests.sql
 psql -U postgres -d dance_studio -f migrations/20261017_client_checkin_codes.sql
 psql -U postgres -d dance_studio -f migrations/20261116_chatbot_faq.sql
+psql -U postgres -d dance_studio -f migrations/20261122_publish_trainer_profiles.sql
 ```
 
 The Docker Compose database service persists PostgreSQL files in the `postgres_data`

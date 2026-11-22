@@ -1,12 +1,13 @@
 import { FormEvent, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, Plus, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle, MembershipType, Membership } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getTodayDate, matchesSearchPrefix } from '../lib/search';
 import NumericInput from '../components/NumericInput';
 import { useActionDialog } from '../components/ActionDialog';
+import Modal from '../components/Modal';
 
 type MembershipTypeForm = {
   name: string;
@@ -28,7 +29,7 @@ const getPaymentError = (error: unknown, fallback: string) => {
 
 const MembershipsPage = () => {
   const { user } = useAuth();
-  const { alert, dialog } = useActionDialog();
+  const { alert, confirm, dialog } = useActionDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [myMemberships, setMyMemberships] = useState<Membership[]>([]);
@@ -332,6 +333,16 @@ const MembershipsPage = () => {
     }
   };
 
+  const permanentlyDeleteType = async (type: MembershipType) => {
+    if (!await confirm(`Удалить тип абонемента «${type.name}» насовсем? Если на его основе уже оформлены абонементы клиентов, удаление будет отклонено. Это действие нельзя отменить.`)) return;
+    try {
+      await api.delete(`/membership-types/${type.id}/permanent`);
+      await fetchData();
+    } catch (deleteError: unknown) {
+      await alert(getPaymentError(deleteError, 'Не удалось удалить тип абонемента насовсем.'));
+    }
+  };
+
   const resetMyMembershipFilters = () => {
     setMyMembershipSearch('');
     setMyMembershipStatus('');
@@ -526,16 +537,17 @@ const MembershipsPage = () => {
         </div>
       )}
 
-      {formOpen && user?.role === 'admin' && <form onSubmit={saveType} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">{editingId ? 'Изменить тип' : 'Новый тип абонемента'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
-        <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-        <label className="text-sm">Цена, BYN<NumericInput required min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
-        <label className="text-sm">Длительность, дней<NumericInput required min={1} className="input mt-1" value={form.duration_days} onChange={(event) => setForm({ ...form, duration_days: event.target.value })} /></label>
-        <label className="text-sm">Посещений<NumericInput min={1} placeholder="Без ограничений" className="input mt-1" value={form.visit_count} onChange={(event) => setForm({ ...form, visit_count: event.target.value })} /></label>
-        <label className="text-sm sm:col-span-2">Описание<textarea rows={3} className="input mt-1" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-        {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
-        <button type="submit" className="btn btn-primary sm:col-span-2">{editingId ? 'Сохранить изменения' : 'Создать тип'}</button>
-      </form>}
+      {formOpen && user?.role === 'admin' && <Modal title={editingId ? 'Изменить тип' : 'Новый тип абонемента'} onClose={() => setFormOpen(false)}>
+        <form onSubmit={saveType} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="text-sm">Название<input required maxLength={100} className="input mt-1" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+          <label className="text-sm">Цена, BYN<NumericInput required min={0} step="0.01" className="input mt-1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
+          <label className="text-sm">Длительность, дней<NumericInput required min={1} className="input mt-1" value={form.duration_days} onChange={(event) => setForm({ ...form, duration_days: event.target.value })} /></label>
+          <label className="text-sm">Посещений<NumericInput min={1} placeholder="Без ограничений" className="input mt-1" value={form.visit_count} onChange={(event) => setForm({ ...form, visit_count: event.target.value })} /></label>
+          <label className="text-sm sm:col-span-2">Описание<textarea rows={3} className="input mt-1" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+          {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
+          <button type="submit" className="btn btn-primary sm:col-span-2">{editingId ? 'Сохранить изменения' : 'Создать тип'}</button>
+        </form>
+      </Modal>}
 
       {user?.role === 'client' && myMemberships.length > 0 && (
         <div className="mb-8">
@@ -635,7 +647,7 @@ const MembershipsPage = () => {
                   <p className="text-2xl font-bold text-primary">{type.price} BYN</p>
                 </div>
                 </div>
-                {user?.role === 'admin' && <div className="flex shrink-0 gap-1"><button onClick={() => openEdit(type)} title="Изменить" aria-label={`Изменить тип ${type.name}`} className="rounded-lg p-2 hover:bg-surface2"><Pencil size={16} /></button>{type.is_active ? <button onClick={() => setTypeActive(type, false)} title="Архивировать" aria-label={`Архивировать ${type.name}`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button> : <button onClick={() => setTypeActive(type, true)} className="text-sm text-primary hover:underline">Активировать</button>}</div>}
+                {user?.role === 'admin' && <div className="flex shrink-0 gap-1"><button type="button" onClick={() => openEdit(type)} title="Изменить" aria-label={`Изменить тип ${type.name}`} className="rounded-lg p-2 hover:bg-surface2"><Pencil size={16} /></button>{type.is_active ? <button type="button" onClick={() => void setTypeActive(type, false)} title="Архивировать" aria-label={`Архивировать ${type.name}`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button> : <><button type="button" onClick={() => void setTypeActive(type, true)} title="Восстановить" aria-label={`Восстановить тип ${type.name}`} className="rounded-lg p-2 text-primary hover:bg-surface2"><RotateCcw size={16} /></button><button type="button" onClick={() => void permanentlyDeleteType(type)} title="Удалить насовсем" aria-label={`Удалить тип абонемента ${type.name} насовсем`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button></>}</div>}
               </div>
 
               {user?.role === 'admin' && !type.is_active && <p className="mb-3 text-xs text-warning">В архиве</p>}

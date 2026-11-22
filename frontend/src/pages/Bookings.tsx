@@ -304,6 +304,7 @@ const BookingsPage = () => {
           {bookingError && <p role="alert" className="card mb-4 border-error text-error">{bookingError}</p>}
           <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2">
             <label className="text-sm">Поиск по занятию, тренеру или залу<input className="input mt-1" value={scheduleSearch} onChange={(event) => setScheduleSearch(event.target.value)} /></label>
+            <p className="text-xs text-textSecondary sm:col-span-2">Поиск и выбранные фильтры применяются одновременно, поэтому несовпадающие условия могут дать пустой результат.</p>
             <label className="text-sm">Стиль<select className="input mt-1" value={scheduleStyle} onChange={(event) => setScheduleStyle(event.target.value)}><option value="">Все стили</option>{scheduleStyles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
             <label className="text-sm">Тренер<select className="input mt-1" value={scheduleTrainer} onChange={(event) => setScheduleTrainer(event.target.value)}><option value="">Все тренеры</option>{scheduleTrainers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
             <label className="text-sm">Зал<select className="input mt-1" value={scheduleHall} onChange={(event) => setScheduleHall(event.target.value)}><option value="">Все залы</option>{scheduleHalls.map((hall) => <option key={hall} value={hall}>{hall}</option>)}</select></label>

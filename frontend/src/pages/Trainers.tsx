@@ -1,6 +1,6 @@
 import { FormEvent, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Star, ArrowUpRight, Plus, Trash2, X } from 'lucide-react';
+import { User, Star, ArrowUpRight, Archive, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { matchesSearchPrefix } from '../lib/search';
 import NumericInput from '../components/NumericInput';
 import { useActionDialog } from '../components/ActionDialog';
 import PasswordInput from '../components/PasswordInput';
+import Modal from '../components/Modal';
 
 type TrainerForm = {
   full_name: string;
@@ -26,7 +27,7 @@ const emptyForm: TrainerForm = {
 
 const TrainersPage = () => {
   const { user } = useAuth();
-  const { confirm, dialog } = useActionDialog();
+  const { alert, confirm, dialog } = useActionDialog();
   const [trainers, setTrainers] = useState<TrainerListItem[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -36,7 +37,7 @@ const TrainersPage = () => {
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [experienceFrom, setExperienceFrom] = useState('');
   const [experienceTo, setExperienceTo] = useState('');
-  const [publicationFilter, setPublicationFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const invalidExperienceRange = Boolean(experienceFrom && experienceTo && Number(experienceFrom) > Number(experienceTo));
 
   useEffect(() => {
@@ -85,13 +86,38 @@ const TrainersPage = () => {
     }
   };
 
-  const deleteTrainer = async (trainer: TrainerListItem) => {
-    if (!await confirm(`Удалить тренера ${trainer.full_name} вместе с его расписанием, бронированиями и историей посещений?`)) return;
+  const openCreateForm = () => {
+    setForm(emptyForm);
+    setError('');
+    setFormOpen(true);
+  };
+
+  const archiveTrainer = async (trainer: TrainerListItem) => {
+    if (!await confirm(`Переместить профиль тренера ${trainer.full_name} в архив? Он исчезнет из публичного каталога, но аккаунт, расписание и история сохранятся.`, 'В архив')) return;
+    try {
+      await api.patch(`/trainers/${trainer.id}/published`, { is_published: false });
+      await fetchTrainers();
+    } catch (deleteError: any) {
+      await alert(deleteError.response?.data?.error || 'Не удалось переместить тренера в архив');
+    }
+  };
+
+  const restoreTrainer = async (trainer: TrainerListItem) => {
+    try {
+      await api.patch(`/trainers/${trainer.id}/published`, { is_published: true });
+      await fetchTrainers();
+    } catch (restoreError: any) {
+      await alert(restoreError.response?.data?.error || 'Не удалось восстановить профиль тренера');
+    }
+  };
+
+  const permanentlyDeleteTrainer = async (trainer: TrainerListItem) => {
+    if (!await confirm(`Полностью удалить тренера ${trainer.full_name}, его аккаунт, расписание, бронирования и историю посещений? Это действие нельзя отменить.`)) return;
     try {
       await api.delete(`/trainers/${trainer.id}`);
       await fetchTrainers();
     } catch (deleteError: any) {
-      setError(deleteError.response?.data?.error || 'Не удалось удалить тренера');
+      await alert(deleteError.response?.data?.error || 'Не удалось удалить тренера насовсем');
     }
   };
 
@@ -100,7 +126,7 @@ const TrainersPage = () => {
     setSpecializationFilter('');
     setExperienceFrom('');
     setExperienceTo('');
-    setPublicationFilter('all');
+    setStatusFilter('active');
   };
 
   const visibleTrainers = trainers.filter((trainer) => {
@@ -109,7 +135,7 @@ const TrainersPage = () => {
       (!specializationFilter || trainer.specialization === specializationFilter) &&
       (!experienceFrom || (trainer.experience_years !== undefined && trainer.experience_years >= Number(experienceFrom))) &&
       (!experienceTo || (trainer.experience_years !== undefined && trainer.experience_years <= Number(experienceTo))) &&
-      (user?.role !== 'admin' || publicationFilter === 'all' || String(trainer.is_published) === publicationFilter);
+      (user?.role !== 'admin' || statusFilter === 'all' || (statusFilter === 'active' ? trainer.is_published : !trainer.is_published));
   });
 
   if (loading) {
@@ -121,27 +147,29 @@ const TrainersPage = () => {
       {dialog}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Наши тренеры</h1>
-        {user?.role === 'admin' && <button onClick={() => { setError(''); setFormOpen(!formOpen); }} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить тренера</button>}
+        {user?.role === 'admin' && <button type="button" onClick={openCreateForm} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить тренера</button>}
       </div>
 
-      {formOpen && user?.role === 'admin' && <form onSubmit={createTrainer} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex items-center justify-between sm:col-span-2"><h2 className="text-xl font-bold">Новый тренер</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
-        <label className="text-sm">Имя и фамилия<input required className="input mt-1" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></label>
-        <label className="text-sm">Email<input required type="email" className="input mt-1" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-        <label className="text-sm">Временный пароль<PasswordInput required minLength={8} className="input mt-1" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
-        <label className="text-sm">Телефон<input type="tel" className="input mt-1" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
-        <label className="text-sm">Направление<input className="input mt-1" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /></label>
-        <label className="text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={form.experience_years} onChange={(event) => setForm({ ...form, experience_years: event.target.value })} /></label>
-        <label className="text-sm sm:col-span-2">Описание профиля<textarea rows={3} className="input mt-1" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
-        {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
-        <button type="submit" className="btn btn-primary sm:col-span-2">Создать аккаунт тренера</button>
-      </form>}
+      {formOpen && user?.role === 'admin' && <Modal title="Новый тренер" onClose={() => setFormOpen(false)} maxWidthClass="max-w-3xl">
+        <form onSubmit={createTrainer} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="text-sm">Имя и фамилия<input required className="input mt-1" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></label>
+          <label className="text-sm">Email<input required type="email" className="input mt-1" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
+          <label className="text-sm">Временный пароль<PasswordInput required minLength={8} className="input mt-1" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+          <label className="text-sm">Телефон<input type="tel" className="input mt-1" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <label className="text-sm">Направление<input className="input mt-1" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /></label>
+          <label className="text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={form.experience_years} onChange={(event) => setForm({ ...form, experience_years: event.target.value })} /></label>
+          <label className="text-sm sm:col-span-2">Описание профиля<textarea rows={3} className="input mt-1" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
+          {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
+          <button type="submit" className="btn btn-primary sm:col-span-2">Создать аккаунт тренера</button>
+        </form>
+      </Modal>}
       {error && !formOpen && <p role="alert" className="mb-4 text-error">{error}</p>}
 
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск тренера
           <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, Анна Зубарева" />
         </label>
+        <p className="text-xs text-textSecondary sm:col-span-2 lg:col-span-4">Поиск проверяет совпадение в любом текстовом поле, а выбранные фильтры дополнительно сужают результаты.</p>
         <label className="text-sm">Направление
           <select className="input mt-1" value={specializationFilter} onChange={(event) => setSpecializationFilter(event.target.value)}>
             <option value="">Все направления</option>
@@ -152,9 +180,11 @@ const TrainersPage = () => {
           <label className="text-sm">Опыт от, лет<NumericInput min={0} max={experienceTo || 70} step={1} className="input mt-1" value={experienceFrom} onChange={(event) => setExperienceFrom(event.target.value)} /></label>
           <label className="text-sm">Опыт до, лет<NumericInput min={experienceFrom || 0} max={70} step={1} className="input mt-1" value={experienceTo} onChange={(event) => setExperienceTo(event.target.value)} /></label>
         </div>
-        {user?.role === 'admin' && <label className="text-sm">Видимость профиля
-          <select className="input mt-1" value={publicationFilter} onChange={(event) => setPublicationFilter(event.target.value)}>
-            <option value="all">Все профили</option><option value="true">Опубликованные</option><option value="false">Скрытые</option>
+        {user?.role === 'admin' && <label className="text-sm">Статус
+          <select className="input mt-1" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="active">Активные</option>
+            <option value="archived">В архиве</option>
+            <option value="all">Все</option>
           </select>
         </label>}
       </div>
@@ -190,9 +220,19 @@ const TrainersPage = () => {
               <div className="min-w-0">
                 <Link to={`/trainers/${trainer.id}`} className="break-words text-xl font-bold hover:text-primary">{trainer.full_name}</Link>
                 <p className="text-primary text-sm">{trainer.specialization}</p>
+                {!trainer.is_published && <p className="mt-1 text-xs text-warning">В архиве</p>}
               </div>
               </div>
-              {user?.role === 'admin' && <button onClick={() => deleteTrainer(trainer)} title="Удалить тренера" aria-label={`Удалить ${trainer.full_name}`} className="shrink-0 rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={18} /></button>}
+              {user?.role === 'admin' && <div className="flex shrink-0 gap-1">
+                {trainer.is_published ? (
+                  <button type="button" onClick={() => void archiveTrainer(trainer)} title="В архив" aria-label={`Переместить ${trainer.full_name} в архив`} className="rounded-lg p-2 text-error hover:bg-surface2"><Archive size={18} /></button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => void restoreTrainer(trainer)} title="Восстановить" aria-label={`Восстановить ${trainer.full_name}`} className="rounded-lg p-2 text-primary hover:bg-surface2"><RotateCcw size={18} /></button>
+                    <button type="button" onClick={() => void permanentlyDeleteTrainer(trainer)} title="Удалить насовсем" aria-label={`Удалить ${trainer.full_name} насовсем`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={18} /></button>
+                  </>
+                )}
+              </div>}
             </div>
 
             {trainer.bio && (

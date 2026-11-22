@@ -7,7 +7,9 @@ export class MembershipTypeController {
     try {
       const { is_active } = req.query;
       const types = await MembershipTypeService.getAllMembershipTypes({
-        is_active: is_active === 'true' ? true : is_active === 'false' ? false : undefined,
+        is_active: req.user?.role !== 'admin'
+          ? true
+          : is_active === 'true' ? true : is_active === 'false' ? false : undefined,
       });
       
       res.json(types);
@@ -20,6 +22,9 @@ export class MembershipTypeController {
     try {
       const { id } = req.params;
       const type = await MembershipTypeService.getMembershipTypeById(parseInt(id));
+      if (!type.is_active && req.user?.role !== 'admin') {
+        throw new AppError(404, 'Membership type not found');
+      }
       
       res.json(type);
     } catch (error: any) {
@@ -66,6 +71,16 @@ export class MembershipTypeController {
       const type = await MembershipTypeService.setMembershipTypeActive(parseInt(id), is_active);
       
       res.json(type);
+    } catch (error: any) {
+      throw new AppError(400, error.message);
+    }
+  }
+
+  static async permanentlyDeleteMembershipType(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await MembershipTypeService.permanentlyDeleteMembershipType(parseInt(id, 10));
+      res.json({ message: 'Membership type permanently deleted' });
     } catch (error: any) {
       throw new AppError(400, error.message);
     }

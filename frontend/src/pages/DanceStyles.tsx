@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Music, Calendar, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Music, Calendar, Plus, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { matchesSearchPrefix } from '../lib/search';
 import { useActionDialog } from '../components/ActionDialog';
+import Modal from '../components/Modal';
 
 const DanceStylesPage = () => {
   const { user } = useAuth();
@@ -70,12 +71,31 @@ const DanceStylesPage = () => {
   };
 
   const deleteStyle = async (style: DanceStyle) => {
-    if (!await confirm(`Полностью удалить стиль «${style.name}» вместе со связанными занятиями, бронированиями и посещениями?`)) return;
+    if (!await confirm(`Переместить стиль «${style.name}» в архив? Занятия и история сохранятся, но стиль нельзя будет выбрать для новых занятий.`, 'В архив')) return;
     try {
       await api.delete(`/dance-styles/${style.id}`);
       await fetchStyles();
     } catch (deleteError: any) {
       await alert(deleteError.response?.data?.error || 'Не удалось удалить стиль');
+    }
+  };
+
+  const setStyleActive = async (style: DanceStyle, isActive: boolean) => {
+    try {
+      await api.patch(`/dance-styles/${style.id}/active`, { is_active: isActive });
+      await fetchStyles();
+    } catch (updateError: any) {
+      await alert(updateError.response?.data?.error || 'Не удалось изменить статус стиля');
+    }
+  };
+
+  const permanentlyDeleteStyle = async (style: DanceStyle) => {
+    if (!await confirm(`Полностью удалить стиль «${style.name}»? Вместе с ним будут удалены связанные занятия, бронирования и посещения. Это действие нельзя отменить.`)) return;
+    try {
+      await api.delete(`/dance-styles/${style.id}/permanent`);
+      await fetchStyles();
+    } catch (deleteError: any) {
+      await alert(deleteError.response?.data?.error || 'Не удалось удалить стиль насовсем');
     }
   };
 
@@ -103,14 +123,15 @@ const DanceStylesPage = () => {
         {user?.role === 'admin' && <button onClick={openCreate} className="btn btn-primary flex items-center gap-2"><Plus size={18} />Добавить стиль</button>}
       </div>
 
-      {formOpen && user?.role === 'admin' && <form onSubmit={saveStyle} className="card mb-8 space-y-4">
-        <div className="flex items-center justify-between"><h2 className="text-xl font-bold">{editingId ? 'Изменить стиль' : 'Новый стиль'}</h2><button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="rounded-lg p-2 hover:bg-surface2"><X size={18} /></button></div>
-        <label className="block text-sm">Название<input required maxLength={100} className="input mt-1" value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label className="block text-sm">Описание<textarea rows={4} className="input mt-1" value={description} onChange={(event) => setDescription(event.target.value)} /></label>
-        <label className="block max-w-sm text-sm">Уровень сложности<select className="input mt-1" value={difficulty} onChange={(event) => setDifficulty(event.target.value as DanceStyle['difficulty'])}><option value="beginner">Начальный</option><option value="intermediate">Средний</option><option value="advanced">Продвинутый</option></select></label>
-        {error && <p role="alert" className="text-error">{error}</p>}
-        <button type="submit" className="btn btn-primary">{editingId ? 'Сохранить' : 'Добавить'}</button>
-      </form>}
+      {formOpen && user?.role === 'admin' && <Modal title={editingId ? 'Изменить стиль' : 'Новый стиль'} onClose={() => setFormOpen(false)}>
+        <form onSubmit={saveStyle} className="space-y-4">
+          <label className="block text-sm">Название<input required maxLength={100} className="input mt-1" value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label className="block text-sm">Описание<textarea rows={4} className="input mt-1" value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+          <label className="block max-w-sm text-sm">Уровень сложности<select className="input mt-1" value={difficulty} onChange={(event) => setDifficulty(event.target.value as DanceStyle['difficulty'])}><option value="beginner">Начальный</option><option value="intermediate">Средний</option><option value="advanced">Продвинутый</option></select></label>
+          {error && <p role="alert" className="text-error">{error}</p>}
+          <button type="submit" className="btn btn-primary">{editingId ? 'Сохранить' : 'Добавить'}</button>
+        </form>
+      </Modal>}
 
       <section className="mb-6 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
@@ -134,7 +155,7 @@ const DanceStylesPage = () => {
                 <Music size={24} className="text-primary" />
               </div>
               <Link to={`/styles/${style.id}`} className="min-w-0 flex-1 break-words text-xl font-bold hover:text-primary">{style.name}</Link>
-              {user?.role === 'admin' && <div className="flex shrink-0 gap-1"><button onClick={() => openEdit(style)} title="Изменить" aria-label={`Изменить стиль ${style.name}`} className="rounded-lg p-2 hover:bg-surface2"><Pencil size={16} /></button>{style.is_active && <button onClick={() => deleteStyle(style)} title="Удалить" aria-label={`Удалить стиль ${style.name}`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button>}</div>}
+              {user?.role === 'admin' && <div className="flex shrink-0 gap-1"><button type="button" onClick={() => openEdit(style)} title="Изменить" aria-label={`Изменить стиль ${style.name}`} className="rounded-lg p-2 hover:bg-surface2"><Pencil size={16} /></button>{style.is_active ? <button type="button" onClick={() => void deleteStyle(style)} title="В архив" aria-label={`Переместить в архив стиль ${style.name}`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button> : <><button type="button" onClick={() => void setStyleActive(style, true)} title="Восстановить" aria-label={`Восстановить стиль ${style.name}`} className="rounded-lg p-2 text-primary hover:bg-surface2"><RotateCcw size={16} /></button><button type="button" onClick={() => void permanentlyDeleteStyle(style)} title="Удалить насовсем" aria-label={`Удалить стиль ${style.name} насовсем`} className="rounded-lg p-2 text-error hover:bg-surface2"><Trash2 size={16} /></button></>}</div>}
             </div>
 
             {user?.role === 'admin' && !style.is_active && <p className="mb-3 text-xs text-warning">В архиве</p>}

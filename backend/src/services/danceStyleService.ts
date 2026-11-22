@@ -3,14 +3,14 @@ import { DanceStyleRecord, DanceStyleRepository } from '../repositories/danceSty
 type DanceStyleInput = Pick<DanceStyleRecord, 'name' | 'description' | 'difficulty'>;
 
 export class DanceStyleService {
-  static async getById(id: number): Promise<DanceStyleRecord> {
+  static async getById(id: number, includeArchived = false): Promise<DanceStyleRecord> {
     const style = await DanceStyleRepository.findById(id);
-    if (!style || !style.is_active) throw new Error('Стиль танца не найден');
+    if (!style || (!style.is_active && !includeArchived)) throw new Error('Стиль танца не найден');
     return style;
   }
 
-  static async getAll(): Promise<DanceStyleRecord[]> {
-    return DanceStyleRepository.findAll();
+  static async getAll(includeArchived = false): Promise<DanceStyleRecord[]> {
+    return DanceStyleRepository.findAll(includeArchived);
   }
 
   static async create(data: DanceStyleInput): Promise<DanceStyleRecord> {
@@ -38,6 +38,24 @@ export class DanceStyleService {
   static async remove(id: number): Promise<void> {
     const current = await DanceStyleRepository.findById(id);
     if (!current) throw new Error('Стиль танца не найден');
+    if (!current.is_active) return;
+    const archived = await DanceStyleRepository.setActive(id, false);
+    if (!archived) throw new Error('Не удалось переместить стиль в архив');
+  }
+
+  static async setActive(id: number, isActive: boolean): Promise<DanceStyleRecord> {
+    if (typeof isActive !== 'boolean') throw new Error('Некорректный статус стиля');
+    const current = await DanceStyleRepository.findById(id);
+    if (!current) throw new Error('Стиль танца не найден');
+    const updated = await DanceStyleRepository.setActive(id, isActive);
+    if (!updated) throw new Error('Не удалось изменить статус стиля');
+    return updated;
+  }
+
+  static async permanentlyDelete(id: number): Promise<void> {
+    const current = await DanceStyleRepository.findById(id);
+    if (!current) throw new Error('Стиль танца не найден');
+    if (current.is_active) throw new Error('Сначала переместите стиль в архив');
     await DanceStyleRepository.delete(id);
   }
 

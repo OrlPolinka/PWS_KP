@@ -1,12 +1,13 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Calendar, MapPin, User as UserIcon, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Calendar, MapPin, User as UserIcon, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { ScheduleListItem, ScheduleOptions, TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getTodayDate, matchesSearchPrefix } from '../lib/search';
 import NumericInput from '../components/NumericInput';
 import { useActionDialog } from '../components/ActionDialog';
+import Modal from '../components/Modal';
 
 const weekDays = [
   { value: 1, label: 'Понедельник' },
@@ -213,6 +214,7 @@ const SchedulePage = () => {
 
       {user?.role !== 'trainer' && <section className="mb-8 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск по стилю, тренеру или залу<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <p className="text-xs text-textSecondary sm:col-span-2 lg:col-span-4">Поиск проверяет совпадение в любом из указанных полей, а выбранные фильтры применяются дополнительно. Например, поиск по одному тренеру и фильтр по другому вместе не дадут результатов.</p>
         <label className="text-sm">Дата занятия
           <input type="date" min={today} className="input mt-1" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           <span className="mt-1 block text-xs text-textSecondary">Покажет занятия по дню недели этой даты.</span>
@@ -229,11 +231,8 @@ const SchedulePage = () => {
       </section>}
 
       {formOpen && user?.role === 'admin' && (
-        <form onSubmit={saveSchedule} className="card mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="flex items-center justify-between sm:col-span-2 lg:col-span-4">
-            <h2 className="text-xl font-bold">{editingId ? 'Изменить занятие' : 'Новое занятие'}</h2>
-            <button type="button" aria-label="Закрыть" onClick={() => setFormOpen(false)} className="p-2 hover:bg-surface2 rounded-lg"><X size={18} /></button>
-          </div>
+        <Modal title={editingId ? 'Изменить занятие' : 'Новое занятие'} onClose={() => setFormOpen(false)} maxWidthClass="max-w-3xl">
+        <form onSubmit={saveSchedule} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-sm">День недели
             <select className="input mt-1" value={form.day_of_week} onChange={(event) => setForm({ ...form, day_of_week: Number(event.target.value) })}>
               {weekDays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
@@ -263,6 +262,7 @@ const SchedulePage = () => {
           <div className="flex items-end"><button type="submit" className="btn btn-primary w-full">{editingId ? 'Сохранить' : 'Добавить'}</button></div>
           {error && <p role="alert" className="text-error sm:col-span-2 lg:col-span-4">{error}</p>}
         </form>
+        </Modal>
       )}
 
       {visibleSchedules.length === 0 ? <div className="card text-center text-textSecondary">{schedules.length === 0 ? 'На этой неделе занятий нет' : 'Занятий по выбранным критериям не найдено'}</div> : <div className="space-y-8">
