@@ -19,10 +19,16 @@ export class PaymentService {
   private static cachedUsdRate: CachedUsdRate | null = null;
 
   private static getStripe(): Stripe {
-    if (!config.stripe.secretKey.startsWith('sk_test_')) {
-      throw new Error('Stripe test mode requires a test secret key with the sk_test_ prefix.');
+    const secretKey = config.stripe.secretKey.trim();
+    if (
+      !secretKey ||
+      secretKey.includes('your_secret_key') ||
+      secretKey.includes('...') ||
+      !secretKey.startsWith('sk_test_')
+    ) {
+      throw new Error('Stripe test mode requires a real test secret key with the sk_test_ prefix.');
     }
-    return new Stripe(config.stripe.secretKey);
+    return new Stripe(secretKey);
   }
 
   private static async getNbrbUsdRate(): Promise<{ bynPerUsd: number; date: string }> {

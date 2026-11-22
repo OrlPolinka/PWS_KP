@@ -22,6 +22,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      NODE_ENV: development
+      PAYMENT_MODE: mock
       DB_HOST: database
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-dance_studio}
