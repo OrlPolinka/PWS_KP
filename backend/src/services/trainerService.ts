@@ -1,4 +1,4 @@
-import { TrainerRepository, UserRepository } from '../repositories';
+import { ScheduleRepository, TrainerRepository, UserRepository } from '../repositories';
 import { TrainerProfile } from '../types';
 
 export class TrainerService {
@@ -72,6 +72,9 @@ export class TrainerService {
     const trainer = await TrainerRepository.findById(id);
     if (!trainer) {
       throw new Error('Trainer not found');
+    }
+    if (data.specialization !== undefined) {
+      await ScheduleRepository.validateTrainerSpecialization(id, data.specialization);
     }
 
     const allowedData: Partial<TrainerProfile> = {

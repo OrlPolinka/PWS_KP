@@ -84,16 +84,6 @@ export class TrainerRepository {
     const client = await getTransactionClient();
     try {
       await client.query('BEGIN');
-      await client.query(
-        `DELETE FROM attendance
-         WHERE trainer_id = $1
-            OR booking_id IN (
-              SELECT b.id FROM bookings b
-              JOIN schedule s ON s.id = b.schedule_id
-              WHERE s.trainer_id = $1
-            )`,
-        [id]
-      );
       await client.query('DELETE FROM schedule WHERE trainer_id = $1', [id]);
       const result = await client.query(
         'DELETE FROM users WHERE id = (SELECT user_id FROM trainers WHERE id = $1)',
@@ -104,6 +94,9 @@ export class TrainerRepository {
       return true;
     } catch (error) {
       await client.query('ROLLBACK');
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') {
+        throw new Error('Тренера нельзя удалить: с его расписанием или посещаемостью связаны записи клиентов. Профиль перемещён в архив.');
+      }
       throw error;
     } finally {
       client.release();

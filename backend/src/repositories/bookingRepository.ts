@@ -11,7 +11,7 @@ export class BookingRepository {
          FROM bookings b
          JOIN schedule s ON s.id = b.schedule_id
          WHERE b.status = 'booked'
-           AND b.class_end <= NOW()
+           AND b.class_end + INTERVAL '3 hours' <= NOW()
            AND NOT EXISTS (
              SELECT 1 FROM attendance a WHERE a.booking_id = b.id
            )
@@ -157,12 +157,15 @@ export class BookingRepository {
       return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
-      const databaseError = error as { code?: string; constraint?: string };
+      const databaseError = error as { code?: string; constraint?: string; message?: string };
       if (databaseError.code === '23P01') {
         throw new Error('You already have a booking that overlaps this class');
       }
       if (databaseError.code === '23505' && databaseError.constraint === 'uq_booking_client_schedule_active') {
         throw new Error('Already booked for this class');
+      }
+      if (databaseError.code === 'P0001' && databaseError.message?.includes('Booking date or class time')) {
+        throw new Error('Дата или время записи не совпадает с выбранным занятием.');
       }
       throw error;
     } finally {
@@ -253,6 +256,7 @@ export class BookingRepository {
   static async findAttendanceRoster(scheduleId: string, classDate: string, trainerUserId: string): Promise<any[]> {
     const result = await query(
       `SELECT b.id AS booking_id, b.status AS booking_status, b.checked_in_at,
+              (b.class_end + INTERVAL '3 hours' > NOW()) AS attendance_open,
               a.id AS attendance_id,
               u.id AS client_id, u.full_name AS client_name, u.phone AS client_phone,
               u.client_code, m.remaining_visits, mt.name AS membership_name,
@@ -282,7 +286,8 @@ export class BookingRepository {
     try {
       await client.query('BEGIN');
       const bookingResult = await client.query(
-        `SELECT b.id AS booking_id, b.status AS booking_status,
+        `        SELECT b.id AS booking_id, b.status AS booking_status,
+               (b.class_end + INTERVAL '3 hours' > NOW()) AS attendance_open,
                 u.id AS client_id, u.full_name AS client_name, u.client_code,
                 m.remaining_visits, m.id AS membership_id,
                 t.id AS trainer_id, mt.name AS membership_name
@@ -294,7 +299,7 @@ export class BookingRepository {
          JOIN membership_types mt ON mt.id = m.membership_type_id
          WHERE s.id = $1
            AND (UPPER(u.client_code) = UPPER($3) OR u.qr_token::text = $3)
-         FOR UPDATE OF b`,
+         FOR UPDATE OF b, m`,
         [scheduleId, classDate, identifier.trim(), trainerUserId]
       );
       const booking = bookingResult.rows[0];
@@ -306,12 +311,27 @@ export class BookingRepository {
           ? 'Посещение этого клиента уже отмечено.'
           : 'Для этого клиента уже отмечена неявка.');
       }
+      if (!booking.attendance_open) {
+        throw new Error('Прошло более 3 часов после окончания занятия. Отметить посещение больше нельзя.');
+      }
 
       await client.query(
         `INSERT INTO attendance (booking_id, trainer_id, is_present)
          VALUES ($1, $2, $3)`,
         [booking.booking_id, booking.trainer_id, isPresent]
       );
+      let remainingVisits = booking.remaining_visits;
+      if (isPresent && remainingVisits !== null) {
+        const membershipResult = await client.query(
+          `UPDATE memberships
+           SET remaining_visits = remaining_visits - 1
+           WHERE id = $1 AND remaining_visits > 0
+           RETURNING remaining_visits`,
+          [booking.membership_id]
+        );
+        if (!membershipResult.rowCount) throw new Error('На абонементе не осталось посещений.');
+        remainingVisits = membershipResult.rows[0].remaining_visits;
+      }
       await client.query(
         `UPDATE bookings
          SET status = $1,
@@ -321,9 +341,6 @@ export class BookingRepository {
          WHERE id = $4`,
         [isPresent ? 'attended' : 'no_show', isPresent, booking.trainer_id, booking.booking_id]
       );
-      const remainingVisits = isPresent && booking.remaining_visits !== null
-        ? Math.max(Number(booking.remaining_visits) - 1, 0)
-        : booking.remaining_visits;
       await client.query('COMMIT');
       return {
         booking_id: booking.booking_id,
@@ -359,18 +376,33 @@ export class BookingRepository {
     try {
       await client.query('BEGIN');
       const bookingResult = await client.query(
-        `SELECT b.id, b.status, b.checked_in, t.id AS trainer_id
+        `        SELECT b.id, b.status, b.checked_in, t.id AS trainer_id,
+               b.class_end + INTERVAL '3 hours' > NOW() AS attendance_open,
+               b.membership_id, m.remaining_visits
          FROM bookings b
          JOIN schedule s ON s.id = b.schedule_id
          JOIN trainers t ON t.id = s.trainer_id
+        JOIN memberships m ON m.id = b.membership_id
          WHERE b.id = $1 AND t.user_id = $2
-         FOR UPDATE OF b`,
+        FOR UPDATE OF b, m`,
         [id, checkedInBy]
       );
       const booking = bookingResult.rows[0];
       if (!booking) throw new Error('Booking not found or trainer is not assigned to this class');
       if (booking.status !== 'booked' || booking.checked_in) {
         throw new Error('Booking is not active or attendance is already marked');
+      }
+      if (!booking.attendance_open) {
+        throw new Error('Прошло более 3 часов после окончания занятия. Отметить посещение больше нельзя.');
+      }
+      if (booking.remaining_visits !== null) {
+        const membershipResult = await client.query(
+          `UPDATE memberships
+           SET remaining_visits = remaining_visits - 1
+           WHERE id = $1 AND remaining_visits > 0`,
+          [booking.membership_id]
+        );
+        if (!membershipResult.rowCount) throw new Error('На абонементе не осталось посещений.');
       }
 
       await client.query(

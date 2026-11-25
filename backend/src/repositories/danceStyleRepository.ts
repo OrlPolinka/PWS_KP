@@ -65,14 +65,6 @@ export class DanceStyleRepository {
       );
       if (!style.rowCount) throw new Error('Стиль танца не найден');
       if (style.rows[0].is_active) throw new Error('Сначала переместите стиль в архив');
-      await client.query(
-        `DELETE FROM attendance WHERE booking_id IN (
-           SELECT b.id FROM bookings b
-           JOIN schedule s ON s.id = b.schedule_id
-           WHERE s.dance_style_id = $1
-         )`,
-        [id]
-      );
       await client.query('DELETE FROM schedule WHERE dance_style_id = $1', [id]);
       const result = await client.query('DELETE FROM dance_styles WHERE id = $1', [id]);
       if (!result.rowCount) throw new Error('Стиль танца не найден');
@@ -80,6 +72,9 @@ export class DanceStyleRepository {
       return true;
     } catch (error) {
       await client.query('ROLLBACK');
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') {
+        throw new Error('Стиль нельзя удалить: с ним связаны записи клиентов или типы абонементов. Стиль перемещён в архив.');
+      }
       throw error;
     } finally {
       client.release();

@@ -79,8 +79,15 @@ export class UserRepository {
   }
 
   static async delete(id: string): Promise<boolean> {
-    const result = await query('DELETE FROM users WHERE id = $1', [id]);
-    return (result.rowCount || 0) > 0;
+    try {
+      const result = await query('DELETE FROM users WHERE id = $1', [id]);
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') {
+        throw new Error('Пользователя нельзя удалить: с его аккаунтом связаны записи занятий, оплат или переписки. История сохранена.');
+      }
+      throw error;
+    }
   }
 
   static async findAll(filters?: {

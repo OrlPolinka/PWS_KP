@@ -35,16 +35,18 @@ psql -U postgres -d dance_studio -f migrations/20261017_membership_extension_req
 psql -U postgres -d dance_studio -f migrations/20261017_client_checkin_codes.sql
 psql -U postgres -d dance_studio -f migrations/20261116_chatbot_faq.sql
 psql -U postgres -d dance_studio -f migrations/20261122_publish_trainer_profiles.sql
+psql -U postgres -d dance_studio -f migrations/20261125_enforce_schedule_and_record_links.sql
 ```
+The integrity migration stops without changing data if it finds overlapping active schedules, class capacity above a room's capacity, mismatched client/membership ownership, or active booking date/time mismatches. It reports existing trainer-specialization mismatches as notices for manual review.
 
 The Docker Compose database service persists PostgreSQL files in the `postgres_data`
 named volume and mounts the initial schema plus the chatbot FAQ migration read-only
 under `/docker-entrypoint-initdb.d/`. These init scripts run automatically only when
-PostgreSQL initializes an empty data volume. For an existing Compose database, apply
-the migration once with:
+PostgreSQL initializes an empty data volume. For an existing Compose database, apply each pending migration once from the
+repository root. For the latest migration:
 
 ```powershell
-docker compose exec -T database psql -U postgres -d dance_studio -f /docker-entrypoint-initdb.d/002-chatbot-faq.sql
+Get-Content database\migrations\20261125_enforce_schedule_and_record_links.sql | docker compose exec -T database psql -U postgres -d dance_studio
 ```
 
 ## Schema

@@ -30,16 +30,20 @@ export class ScheduleRepository {
     max_capacity: number;
     created_by: string;
   }): Promise<Schedule> {
-    const result = await query(
-      `INSERT INTO schedule (trainer_id, hall_id, dance_style_id, day_of_week, start_time, end_time, max_capacity, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [
-        data.trainer_id, data.hall_id, data.dance_style_id, data.day_of_week,
-        data.start_time, data.end_time, data.max_capacity, data.created_by
-      ]
-    );
-    return result.rows[0];
+    try {
+      const result = await query(
+        `INSERT INTO schedule (trainer_id, hall_id, dance_style_id, day_of_week, start_time, end_time, max_capacity, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          data.trainer_id, data.hall_id, data.dance_style_id, data.day_of_week,
+          data.start_time, data.end_time, data.max_capacity, data.created_by
+        ]
+      );
+      return result.rows[0];
+    } catch (error) {
+      this.throwScheduleConstraintError(error);
+    }
   }
 
   static async update(id: string, data: Partial<Schedule>): Promise<Schedule | null> {
@@ -62,8 +66,31 @@ export class ScheduleRepository {
 
     values.push(id);
     const queryText = `UPDATE schedule SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-    const result = await query(queryText, values);
-    return result.rows[0] || null;
+    try {
+      const result = await query(queryText, values);
+      return result.rows[0] || null;
+    } catch (error) {
+      this.throwScheduleConstraintError(error);
+    }
+  }
+
+  private static throwScheduleConstraintError(error: unknown): never {
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      if (error.code === '23P01') throw new Error('Тренер или зал уже занят в это время.');
+      if (error.code === 'P0001' && 'message' in error) {
+        const message = String(error.message);
+        if (message.includes('Schedule capacity')) {
+          throw new Error('Вместимость занятия превышает вместимость зала.');
+        }
+        if (message.includes('schedule with booking history')) {
+          throw new Error('Нельзя менять тренера, зал, направление, день или время занятия, пока у него есть история записей. Создайте новое занятие и отмените старое.');
+        }
+        if (message.includes('Schedule capacity is below')) {
+          throw new Error('Нельзя уменьшить вместимость ниже количества уже записанных клиентов.');
+        }
+      }
+    }
+    throw error;
   }
 
   static async delete(id: string): Promise<boolean> {
@@ -90,6 +117,64 @@ export class ScheduleRepository {
       [data.day_of_week, data.trainer_id, data.hall_id, data.start_time, data.end_time, exceptId || null]
     );
     return result.rowCount !== 0;
+  }
+
+  static async validateAssignments(data: {
+    trainer_id: string;
+    hall_id: number;
+    dance_style_id: number;
+    max_capacity: number;
+  }): Promise<void> {
+    const result = await query(
+      `SELECT h.capacity AS hall_capacity, h.is_active AS hall_active,
+              ds.name AS style_name, ds.is_active AS style_active,
+              t.specialization, u.is_active AS trainer_active, u.role AS trainer_role
+       FROM trainers t
+       JOIN users u ON u.id = t.user_id
+       JOIN halls h ON h.id = $2
+       JOIN dance_styles ds ON ds.id = $3
+       WHERE t.id = $1`,
+      [data.trainer_id, data.hall_id, data.dance_style_id]
+    );
+    const assignment = result.rows[0];
+    if (!assignment) throw new Error('Выберите существующие зал, тренера и направление.');
+    if (!assignment.trainer_active || assignment.trainer_role !== 'trainer') {
+      throw new Error('Нельзя назначить неактивного пользователя или пользователя без роли тренера.');
+    }
+    if (!assignment.hall_active) throw new Error('Нельзя назначить неактивный зал.');
+    if (!assignment.style_active) throw new Error('Нельзя назначить архивное направление.');
+    if (Number(data.max_capacity) > Number(assignment.hall_capacity)) {
+      throw new Error(`Вместимость занятия не может превышать вместимость зала (${assignment.hall_capacity} мест).`);
+    }
+
+    if (!this.matchesSpecialization(assignment.specialization, assignment.style_name)) {
+      throw new Error(`Тренер не ведёт направление «${assignment.style_name}».`);
+    }
+  }
+
+  static async validateTrainerSpecialization(trainerId: string, specialization?: string | null): Promise<void> {
+    const result = await query(
+      `SELECT DISTINCT ds.name AS style_name
+       FROM schedule s
+       JOIN dance_styles ds ON ds.id = s.dance_style_id
+       WHERE s.trainer_id = $1 AND s.status = 'scheduled'`,
+      [trainerId]
+    );
+    const incompatibleStyles = result.rows
+      .map((row: { style_name: string }) => row.style_name)
+      .filter((styleName: string) => !this.matchesSpecialization(specialization, styleName));
+    if (incompatibleStyles.length) {
+      throw new Error(`Нельзя изменить направления тренера: в расписании уже есть занятия по направлениям ${incompatibleStyles.join(', ')}.`);
+    }
+  }
+
+  private static matchesSpecialization(specialization: unknown, styleName: unknown): boolean {
+    if (typeof specialization !== 'string' || !specialization.trim()) return true;
+    const allowedStyles = specialization
+      .split(/[,;\r\n]+/)
+      .map((style) => style.trim().toLocaleLowerCase('ru'))
+      .filter(Boolean);
+    return allowedStyles.includes(String(styleName).trim().toLocaleLowerCase('ru'));
   }
 
   static async hasClassInRange(

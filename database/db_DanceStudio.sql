@@ -105,13 +105,60 @@ CREATE INDEX idx_schedule_day     ON schedule(day_of_week);
 CREATE INDEX idx_schedule_trainer ON schedule(trainer_id);
 CREATE INDEX idx_schedule_status  ON schedule(status);
 
-CREATE UNIQUE INDEX uq_schedule_hall_time
-    ON schedule(hall_id, day_of_week, start_time)
-    WHERE status NOT IN ('cancelled');
+ALTER TABLE schedule ADD CONSTRAINT ex_schedule_trainer_no_overlap
+    EXCLUDE USING gist (
+        trainer_id WITH =,
+        day_of_week WITH =,
+        tsrange(DATE '2000-01-03' + start_time, DATE '2000-01-03' + end_time, '[)') WITH &&
+    ) WHERE (status <> 'cancelled');
 
-CREATE UNIQUE INDEX uq_schedule_trainer_time
-    ON schedule(trainer_id, day_of_week, start_time)
-    WHERE status NOT IN ('cancelled');
+ALTER TABLE schedule ADD CONSTRAINT ex_schedule_hall_no_overlap
+    EXCLUDE USING gist (
+        hall_id WITH =,
+        day_of_week WITH =,
+        tsrange(DATE '2000-01-03' + start_time, DATE '2000-01-03' + end_time, '[)') WITH &&
+    ) WHERE (status <> 'cancelled');
+
+CREATE OR REPLACE FUNCTION enforce_schedule_hall_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+    hall_capacity INTEGER;
+BEGIN
+    SELECT capacity INTO hall_capacity
+    FROM halls
+    WHERE id = NEW.hall_id
+    FOR KEY SHARE;
+
+    IF hall_capacity IS NULL THEN
+        RAISE EXCEPTION 'Selected hall does not exist';
+    END IF;
+    IF NEW.max_capacity > hall_capacity THEN
+        RAISE EXCEPTION 'Schedule capacity (%) exceeds hall capacity (%)', NEW.max_capacity, hall_capacity;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_schedule_hall_capacity
+    BEFORE INSERT OR UPDATE OF hall_id, max_capacity ON schedule
+    FOR EACH ROW EXECUTE FUNCTION enforce_schedule_hall_capacity();
+
+CREATE OR REPLACE FUNCTION prevent_hall_capacity_reduction_below_schedules()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.capacity < OLD.capacity AND EXISTS (
+        SELECT 1 FROM schedule
+        WHERE hall_id = OLD.id AND max_capacity > NEW.capacity
+    ) THEN
+        RAISE EXCEPTION 'Hall capacity cannot be reduced below a linked schedule capacity';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_hall_capacity_schedule_guard
+    BEFORE UPDATE OF capacity ON halls
+    FOR EACH ROW EXECUTE FUNCTION prevent_hall_capacity_reduction_below_schedules();
 
 
 CREATE TABLE membership_types (
@@ -121,7 +168,7 @@ CREATE TABLE membership_types (
     price           NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
     visit_count     INTEGER CHECK (visit_count IS NULL OR visit_count > 0), -- NULL = безлимит
     duration_days   INTEGER NOT NULL CHECK (duration_days > 0),
-    dance_style_id  INTEGER REFERENCES dance_styles(id) ON DELETE SET NULL,
+    dance_style_id  INTEGER REFERENCES dance_styles(id) ON DELETE RESTRICT,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -145,15 +192,17 @@ CREATE TABLE payments (
     updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE payments ADD CONSTRAINT uq_payment_id_user UNIQUE (id, user_id);
+
 CREATE INDEX idx_payments_user   ON payments(user_id);
 CREATE INDEX idx_payments_status ON payments(status);
 
 
 CREATE TABLE memberships (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id           UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     membership_type_id  INTEGER NOT NULL REFERENCES membership_types(id) ON DELETE RESTRICT,
-    payment_id          UUID REFERENCES payments(id) ON DELETE SET NULL,
+    payment_id          UUID REFERENCES payments(id) ON DELETE RESTRICT,
 
     purchase_date       TIMESTAMP NOT NULL DEFAULT NOW(),
     start_date          DATE NOT NULL,
@@ -168,7 +217,10 @@ CREATE TABLE memberships (
     paused_at           DATE,
     paused_until        DATE,
 
-    CONSTRAINT chk_membership_dates CHECK (end_date >= start_date)
+    CONSTRAINT chk_membership_dates CHECK (end_date >= start_date),
+    CONSTRAINT uq_membership_id_client UNIQUE (id, client_id),
+    CONSTRAINT fk_membership_payment_owner
+        FOREIGN KEY (payment_id, client_id) REFERENCES payments(id, user_id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_memberships_client ON memberships(client_id);
@@ -177,8 +229,8 @@ CREATE INDEX idx_memberships_status ON memberships(status);
 
 CREATE TABLE membership_extension_requests (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    membership_id   UUID NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
-    client_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    membership_id   UUID NOT NULL REFERENCES memberships(id) ON DELETE RESTRICT,
+    client_id       UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     requested_days  INTEGER CHECK (requested_days IS NULL OR requested_days > 0),
     requested_visits INTEGER CHECK (requested_visits IS NULL OR requested_visits > 0),
@@ -193,6 +245,8 @@ CREATE TABLE membership_extension_requests (
     admin_comment   TEXT,
 
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_extension_membership_owner
+        FOREIGN KEY (membership_id, client_id) REFERENCES memberships(id, client_id) ON DELETE RESTRICT,
     CONSTRAINT chk_extension_request_quantity CHECK (
         (requested_unit = 'days' AND requested_days > 0 AND requested_visits IS NULL)
         OR
@@ -209,11 +263,11 @@ CREATE INDEX idx_ext_req_membership_pending
 
 CREATE TABLE bookings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    schedule_id     UUID NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
+    schedule_id     UUID NOT NULL REFERENCES schedule(id) ON DELETE RESTRICT,
     class_date      DATE NOT NULL,
     class_start     TIMESTAMP NOT NULL,
     class_end       TIMESTAMP NOT NULL,
-    client_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id       UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     membership_id   UUID NOT NULL REFERENCES memberships(id) ON DELETE RESTRICT,
 
     booked_at       TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -226,7 +280,9 @@ CREATE TABLE bookings (
 	checked_in_at       TIMESTAMP,
 	checked_in_by       UUID REFERENCES trainers(id) ON DELETE SET NULL,
 
-    CONSTRAINT chk_booking_class_time CHECK (class_end > class_start)
+    CONSTRAINT chk_booking_class_time CHECK (class_end > class_start),
+    CONSTRAINT fk_booking_membership_owner
+        FOREIGN KEY (membership_id, client_id) REFERENCES memberships(id, client_id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_bookings_client   ON bookings(client_id);
@@ -242,10 +298,101 @@ ALTER TABLE bookings ADD CONSTRAINT ex_booking_client_no_overlap
         tsrange(class_start, class_end, '[)') WITH &&
     ) WHERE (status <> 'cancelled');
 
+CREATE OR REPLACE FUNCTION prevent_booking_identity_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.schedule_id IS DISTINCT FROM OLD.schedule_id
+       OR NEW.client_id IS DISTINCT FROM OLD.client_id
+       OR NEW.membership_id IS DISTINCT FROM OLD.membership_id
+       OR NEW.class_date IS DISTINCT FROM OLD.class_date
+       OR NEW.class_start IS DISTINCT FROM OLD.class_start
+       OR NEW.class_end IS DISTINCT FROM OLD.class_end THEN
+        RAISE EXCEPTION 'Booking ownership and class references cannot be changed';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_booking_identity_immutable
+    BEFORE UPDATE OF schedule_id, client_id, membership_id, class_date, class_start, class_end
+    ON bookings
+    FOR EACH ROW EXECUTE FUNCTION prevent_booking_identity_changes();
+
+CREATE OR REPLACE FUNCTION enforce_booking_matches_schedule()
+RETURNS TRIGGER AS $$
+DECLARE
+    schedule_day SMALLINT;
+    schedule_start TIME;
+    schedule_end TIME;
+BEGIN
+    SELECT day_of_week, start_time, end_time
+    INTO schedule_day, schedule_start, schedule_end
+    FROM schedule
+    WHERE id = NEW.schedule_id;
+
+    IF schedule_day IS NULL
+       OR EXTRACT(ISODOW FROM NEW.class_date)::SMALLINT <> schedule_day
+       OR NEW.class_start <> NEW.class_date + schedule_start
+       OR NEW.class_end <> NEW.class_date + schedule_end THEN
+        RAISE EXCEPTION 'Booking date or class time does not match the selected schedule';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_booking_matches_schedule
+    BEFORE INSERT OR UPDATE OF schedule_id, class_date, class_start, class_end
+    ON bookings
+    FOR EACH ROW EXECUTE FUNCTION enforce_booking_matches_schedule();
+
+CREATE OR REPLACE FUNCTION prevent_schedule_identity_changes_with_bookings()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (
+        NEW.trainer_id IS DISTINCT FROM OLD.trainer_id
+        OR NEW.hall_id IS DISTINCT FROM OLD.hall_id
+        OR NEW.dance_style_id IS DISTINCT FROM OLD.dance_style_id
+        OR NEW.day_of_week IS DISTINCT FROM OLD.day_of_week
+        OR NEW.start_time IS DISTINCT FROM OLD.start_time
+        OR NEW.end_time IS DISTINCT FROM OLD.end_time
+    ) AND EXISTS (
+        SELECT 1 FROM bookings WHERE schedule_id = OLD.id
+    ) THEN
+        RAISE EXCEPTION 'A schedule with booking history cannot change its trainer, hall, style, day, or time';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_schedule_identity_immutable_with_bookings
+    BEFORE UPDATE OF trainer_id, hall_id, dance_style_id, day_of_week, start_time, end_time
+    ON schedule
+    FOR EACH ROW EXECUTE FUNCTION prevent_schedule_identity_changes_with_bookings();
+
+CREATE OR REPLACE FUNCTION prevent_schedule_capacity_below_bookings()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.max_capacity < OLD.max_capacity AND EXISTS (
+        SELECT 1
+        FROM bookings
+        WHERE schedule_id = OLD.id AND status <> 'cancelled'
+        GROUP BY class_date
+        HAVING COUNT(*) > NEW.max_capacity
+    ) THEN
+        RAISE EXCEPTION 'Schedule capacity is below the number of linked bookings';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_schedule_capacity_booking_guard
+    BEFORE UPDATE OF max_capacity ON schedule
+    FOR EACH ROW EXECUTE FUNCTION prevent_schedule_capacity_below_bookings();
+
 
 CREATE TABLE attendance (
     id          BIGSERIAL PRIMARY KEY,
-    booking_id  UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    booking_id  UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE RESTRICT,
     trainer_id  UUID NOT NULL REFERENCES trainers(id) ON DELETE RESTRICT,
     is_present  BOOLEAN NOT NULL,
     marked_at   TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -254,11 +401,32 @@ CREATE TABLE attendance (
 
 CREATE INDEX idx_attendance_trainer ON attendance(trainer_id);
 
+CREATE OR REPLACE FUNCTION enforce_attendance_trainer_matches_schedule()
+RETURNS TRIGGER AS $$
+DECLARE
+    assigned_trainer UUID;
+BEGIN
+    SELECT s.trainer_id INTO assigned_trainer
+    FROM bookings b
+    JOIN schedule s ON s.id = b.schedule_id
+    WHERE b.id = NEW.booking_id;
+
+    IF assigned_trainer IS DISTINCT FROM NEW.trainer_id THEN
+        RAISE EXCEPTION 'Attendance trainer must match the trainer assigned to the booking';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_attendance_trainer_matches_schedule
+    BEFORE INSERT OR UPDATE OF booking_id, trainer_id ON attendance
+    FOR EACH ROW EXECUTE FUNCTION enforce_attendance_trainer_matches_schedule();
+
 
 CREATE TABLE messages (
     id          BIGSERIAL PRIMARY KEY,
-    sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     content     TEXT NOT NULL,
     is_read     BOOLEAN NOT NULL DEFAULT FALSE,
     edited      BOOLEAN NOT NULL DEFAULT FALSE,

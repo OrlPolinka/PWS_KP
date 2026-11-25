@@ -45,7 +45,74 @@ test('markPastBookingsAsNoShow inserts a no-show attendance row and commits each
   assert.equal(calls.filter((call) => call.text.startsWith('UPDATE bookings')).length, 2);
   assert.equal(calls.filter((call) => call.text === 'COMMIT').length, 1);
   assert.equal(calls.some((call) => call.text.includes('FOR UPDATE OF b SKIP LOCKED')), true);
+  assert.equal(calls.some((call) => call.text.includes("b.class_end + INTERVAL '3 hours' <= NOW()")), true);
   assert.equal(calls.at(-1).text, 'RELEASE');
+});
+
+test('markAttendanceByIdentifier rejects after the three-hour attendance window', async () => {
+  const calls = [];
+  database.getTransactionClient = async () => ({
+    async query(text) {
+      calls.push(text);
+      if (text.trimStart().startsWith('SELECT b.id AS booking_id')) {
+        return {
+          rows: [{ booking_status: 'booked', attendance_open: false }],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  });
+
+  await assert.rejects(
+    BookingRepository.markAttendanceByIdentifier('schedule-id', '2026-11-25', 'CL-123', 'trainer-user-id', true),
+    /Прошло более 3 часов/
+  );
+  assert.equal(calls.some((text) => text.startsWith('INSERT INTO attendance')), false);
+  assert.equal(calls.includes('ROLLBACK'), true);
+});
+
+test('markAttendanceByIdentifier debits a limited membership for a present client', async () => {
+  const calls = [];
+  database.getTransactionClient = async () => ({
+    async query(text) {
+      calls.push(text);
+      if (text.trimStart().startsWith('SELECT b.id AS booking_id')) {
+        return {
+          rows: [{
+            booking_id: 'booking-id',
+            booking_status: 'booked',
+            attendance_open: true,
+            client_id: 'client-id',
+            client_name: 'Client',
+            client_code: 'CL-123',
+            membership_id: 'membership-id',
+            membership_name: '10 занятий',
+            remaining_visits: 3,
+            trainer_id: 'trainer-id',
+          }],
+          rowCount: 1,
+        };
+      }
+      if (text.startsWith('UPDATE memberships')) {
+        return { rows: [{ remaining_visits: 2 }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  });
+
+  const result = await BookingRepository.markAttendanceByIdentifier(
+    'schedule-id',
+    '2026-11-25',
+    'CL-123',
+    'trainer-user-id',
+    true
+  );
+
+  assert.equal(result.remaining_visits, 2);
+  assert.equal(calls.some((text) => text.startsWith('UPDATE memberships')), true);
 });
 
 test('markPastBookingsAsNoShow skips a booking if attendance already exists', async () => {

@@ -131,7 +131,7 @@ const TrainersPage = () => {
 
   const visibleTrainers = trainers.filter((trainer) => {
     return !invalidExperienceRange &&
-      matchesSearchPrefix(search, trainer.full_name, trainer.email, trainer.phone, trainer.specialization, trainer.bio) &&
+      matchesSearchPrefix(search, trainer.full_name) &&
       (!specializationFilter || trainer.specialization === specializationFilter) &&
       (!experienceFrom || (trainer.experience_years !== undefined && trainer.experience_years >= Number(experienceFrom))) &&
       (!experienceTo || (trainer.experience_years !== undefined && trainer.experience_years <= Number(experienceTo))) &&
@@ -156,7 +156,7 @@ const TrainersPage = () => {
           <label className="text-sm">Email<input required type="email" className="input mt-1" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
           <label className="text-sm">Временный пароль<PasswordInput required minLength={8} className="input mt-1" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
           <label className="text-sm">Телефон<input type="tel" className="input mt-1" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
-          <label className="text-sm">Направление<input className="input mt-1" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /></label>
+          <label className="text-sm">Направления<input className="input mt-1" placeholder="Например: Hip Hop, Contemporary" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /><span className="mt-1 block text-xs text-textSecondary">Если указаны направления, они должны совпадать со стилем занятия. Перечисляйте через запятую.</span></label>
           <label className="text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={form.experience_years} onChange={(event) => setForm({ ...form, experience_years: event.target.value })} /></label>
           <label className="text-sm sm:col-span-2">Описание профиля<textarea rows={3} className="input mt-1" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
           {error && <p role="alert" className="text-error sm:col-span-2">{error}</p>}
@@ -169,7 +169,6 @@ const TrainersPage = () => {
         <label className="text-sm">Поиск тренера
           <input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Например, Анна Зубарева" />
         </label>
-        <p className="text-xs text-textSecondary sm:col-span-2 lg:col-span-4">Поиск проверяет совпадение в любом текстовом поле, а выбранные фильтры дополнительно сужают результаты.</p>
         <label className="text-sm">Направление
           <select className="input mt-1" value={specializationFilter} onChange={(event) => setSpecializationFilter(event.target.value)}>
             <option value="">Все направления</option>

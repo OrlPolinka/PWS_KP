@@ -107,12 +107,15 @@ const SchedulePage = () => {
   };
 
   const formatTime = (timeString: string) => timeString.slice(0, 5);
+  const selectedHallCapacity = options.halls.find((hall) => hall.id === form.hall_id)?.capacity;
   const openCreate = () => {
     setEditingId(null);
+    const defaultHall = options.halls[0];
     setForm({
       ...emptyForm,
       trainer_id: trainers[0]?.id || '',
-      hall_id: Number(options.halls[0]?.id || 0),
+      hall_id: Number(defaultHall?.id || 0),
+      max_capacity: Math.min(emptyForm.max_capacity, defaultHall?.capacity || emptyForm.max_capacity),
       dance_style_id: options.dance_styles[0]?.id || 0,
     });
     setError('');
@@ -214,11 +217,9 @@ const SchedulePage = () => {
 
       {user?.role !== 'trainer' && <section className="mb-8 grid grid-cols-1 gap-3 border-y border-surface2 py-5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Поиск по стилю, тренеру или залу<input className="input mt-1" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-        <p className="text-xs text-textSecondary sm:col-span-2 lg:col-span-4">Поиск проверяет совпадение в любом из указанных полей, а выбранные фильтры применяются дополнительно. Например, поиск по одному тренеру и фильтр по другому вместе не дадут результатов.</p>
         <label className="text-sm">Дата занятия
           <input type="date" min={today} className="input mt-1" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
-          <span className="mt-1 block text-xs text-textSecondary">Покажет занятия по дню недели этой даты.</span>
-        </label>
+          </label>
         <label className="text-sm">День недели<select className="input mt-1" value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}><option value="">Все дни</option>{weekDays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}</select></label>
         <label className="text-sm">Тренер<select className="input mt-1" value={selectedTrainer} onChange={(event) => setSelectedTrainer(event.target.value)}><option value="">Все тренеры</option>{trainerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         <label className="text-sm">Стиль<select className="input mt-1" value={selectedStyle} onChange={(event) => setSelectedStyle(event.target.value)}><option value="">Все стили</option>{styleOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
@@ -245,9 +246,17 @@ const SchedulePage = () => {
             </select>
           </label>
           <label className="text-sm">Зал
-            <select required className="input mt-1" value={form.hall_id} onChange={(event) => setForm({ ...form, hall_id: Number(event.target.value) })}>
+            <select required className="input mt-1" value={form.hall_id} onChange={(event) => {
+              const hallId = Number(event.target.value);
+              const hallCapacity = options.halls.find((hall) => hall.id === hallId)?.capacity;
+              setForm({
+                ...form,
+                hall_id: hallId,
+                max_capacity: hallCapacity ? Math.min(form.max_capacity, hallCapacity) : form.max_capacity,
+              });
+            }}>
               <option value={0}>Выберите зал</option>
-              {options.halls.map((hall) => <option key={hall.id} value={hall.id}>{hall.name}</option>)}
+              {options.halls.map((hall) => <option key={hall.id} value={hall.id}>{hall.name} · до {hall.capacity} мест</option>)}
             </select>
           </label>
           <label className="text-sm">Стиль танца
@@ -258,7 +267,7 @@ const SchedulePage = () => {
           </label>
           <label className="text-sm">Начало<input required type="time" className="input mt-1" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} /></label>
           <label className="text-sm">Окончание<input required type="time" className="input mt-1" value={form.end_time} onChange={(event) => setForm({ ...form, end_time: event.target.value })} /></label>
-          <label className="text-sm">Вместимость<NumericInput required min={1} className="input mt-1" value={form.max_capacity} onChange={(event) => setForm({ ...form, max_capacity: Number(event.target.value) })} /></label>
+          <label className="text-sm">Вместимость занятия<NumericInput required min={1} max={selectedHallCapacity} className="input mt-1" value={form.max_capacity} onChange={(event) => setForm({ ...form, max_capacity: Number(event.target.value) })} />{selectedHallCapacity && <span className="mt-1 block text-xs text-textSecondary">В зале максимум {selectedHallCapacity} мест.</span>}</label>
           <div className="flex items-end"><button type="submit" className="btn btn-primary w-full">{editingId ? 'Сохранить' : 'Добавить'}</button></div>
           {error && <p role="alert" className="text-error sm:col-span-2 lg:col-span-4">{error}</p>}
         </form>

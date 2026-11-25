@@ -37,6 +37,7 @@ test('update corrects an automatic no-show and debits one membership visit', asy
   const calls = installFakeClient({
     id: 8,
     is_present: false,
+    attendance_open: true,
     remaining_visits: 3,
     visit_count: 10,
     membership_id: 'membership-id',
@@ -59,6 +60,7 @@ test('update restores a visit when a present mark is changed to no-show', async 
   const calls = installFakeClient({
     id: 8,
     is_present: true,
+    attendance_open: true,
     remaining_visits: 4,
     visit_count: 10,
     membership_id: 'membership-id',
@@ -77,6 +79,7 @@ test('update rolls back when a corrected attendance cannot debit a visit', async
   const calls = installFakeClient({
     id: 8,
     is_present: false,
+    attendance_open: true,
     remaining_visits: 0,
     visit_count: 10,
     membership_id: 'membership-id',
@@ -91,4 +94,23 @@ test('update rolls back when a corrected attendance cannot debit a visit', async
   assert.equal(calls.some((call) => call.text.startsWith('UPDATE attendance')), false);
   assert.equal(calls.some((call) => call.text === 'ROLLBACK'), true);
   assert.equal(calls.at(-1).text, 'RELEASE');
+});
+
+test('update refuses to change attendance after the three-hour window', async () => {
+  const calls = installFakeClient({
+    id: 8,
+    is_present: false,
+    attendance_open: false,
+    remaining_visits: 3,
+    visit_count: 10,
+    membership_id: 'membership-id',
+    booking_id: 'booking-id',
+  });
+
+  await assert.rejects(
+    AttendanceRepository.update(8, 'trainer-id', { is_present: true }),
+    /Прошло более 3 часов/
+  );
+  assert.equal(calls.some((call) => call.text.startsWith('UPDATE attendance')), false);
+  assert.equal(calls.some((call) => call.text === 'ROLLBACK'), true);
 });

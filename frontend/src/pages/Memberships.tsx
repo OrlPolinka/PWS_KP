@@ -2,7 +2,7 @@ import { FormEvent, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CreditCard, Clock, CheckCircle, Plus, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import api from '../services/api';
-import { DanceStyle, MembershipType, Membership } from '../types';
+import { MembershipType, Membership } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getTodayDate, matchesSearchPrefix } from '../lib/search';
 import NumericInput from '../components/NumericInput';
@@ -33,7 +33,6 @@ const MembershipsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [myMemberships, setMyMemberships] = useState<Membership[]>([]);
-  const [danceStyles, setDanceStyles] = useState<DanceStyle[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -240,12 +239,8 @@ const MembershipsPage = () => {
 
   const fetchData = async () => {
     try {
-      const [typesRes, stylesRes] = await Promise.all([
-        api.get<MembershipType[]>('/membership-types'),
-        api.get<DanceStyle[]>('/dance-styles'),
-      ]);
+      const typesRes = await api.get<MembershipType[]>('/membership-types');
       setMembershipTypes(typesRes.data);
-      setDanceStyles(stylesRes.data);
       if (user?.role === 'client') {
         const membershipsRes = await api.get<Membership[]>('/memberships/my');
         setMyMemberships(membershipsRes.data);
@@ -324,6 +319,7 @@ const MembershipsPage = () => {
   };
 
   const setTypeActive = async (type: MembershipType, isActive: boolean) => {
+    if (!isActive && !await confirm(`Переместить тип абонемента «${type.name}» в архив? Уже оформленные абонементы сохранятся, но новые клиенты не смогут его выбрать.`, 'В архив')) return;
     try {
       if (isActive) await api.patch(`/membership-types/${type.id}/active`, { is_active: true });
       else await api.delete(`/membership-types/${type.id}`);
@@ -623,7 +619,6 @@ const MembershipsPage = () => {
         <h2 className="text-xl font-bold mb-4">Доступные абонементы</h2>
         <div className="mb-4 grid grid-cols-1 gap-3 border-y border-surface2 py-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-sm">Поиск по названию или описанию<input className="input mt-1" value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} /></label>
-          <label className="text-sm">Направление<select className="input mt-1" value={typeStyle} onChange={(event) => setTypeStyle(event.target.value)}><option value="">Все направления</option>{danceStyles.map((style) => <option key={style.id} value={style.id}>{style.name}</option>)}</select></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-sm">Цена от<NumericInput min={0} max={priceTo || undefined} className="input mt-1" value={priceFrom} onChange={(event) => setPriceFrom(event.target.value)} /></label><label className="text-sm">Цена до<NumericInput min={priceFrom || 0} className="input mt-1" value={priceTo} onChange={(event) => setPriceTo(event.target.value)} /></label></div>
           <div className="grid grid-cols-2 gap-3"><label className="text-sm">Дней от<NumericInput min={1} max={durationTo || undefined} className="input mt-1" value={durationFrom} onChange={(event) => setDurationFrom(event.target.value)} /></label><label className="text-sm">Дней до<NumericInput min={durationFrom || 1} className="input mt-1" value={durationTo} onChange={(event) => setDurationTo(event.target.value)} /></label></div>
           {(invalidPriceRange || invalidDurationRange) && <p role="alert" className="text-error sm:col-span-2 lg:col-span-4">Значение «от» не может быть больше значения «до».</p>}

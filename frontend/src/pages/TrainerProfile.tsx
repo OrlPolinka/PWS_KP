@@ -171,7 +171,7 @@ const TrainerProfilePage = () => {
           </label>
           {profile.photo_url && <button type="button" onClick={() => void removeMedia(profile.photo_url!, 'photo')} disabled={saving} className="inline-flex items-center gap-2 text-sm text-error disabled:opacity-50"><Trash2 size={16} />Удалить фото</button>}
         </div>
-        <label className="block text-sm">Направление<input className="input mt-1" value={profile.specialization || ''} onChange={(event) => setProfile({ ...profile, specialization: event.target.value })} /></label>
+        <label className="block text-sm">Направления<input className="input mt-1" value={profile.specialization || ''} onChange={(event) => setProfile({ ...profile, specialization: event.target.value })} /><span className="mt-1 block text-xs text-textSecondary">Если указаны направления, они должны совпадать со стилем занятия. Перечисляйте через запятую.</span></label>
         <label className="block text-sm">О себе<textarea rows={5} className="input mt-1" value={profile.bio || ''} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block text-sm">Опыт, лет<NumericInput min={0} max={70} step={1} className="input mt-1" value={profile.experience_years ?? ''} onChange={(event) => setProfile({ ...profile, experience_years: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>

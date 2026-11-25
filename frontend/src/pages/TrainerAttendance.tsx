@@ -13,6 +13,7 @@ interface AttendanceRosterItem {
   attendance_id: number | null;
   booking_status: 'booked' | 'attended' | 'no_show';
   checked_in_at: string | null;
+  attendance_open: boolean;
   client_id: string;
   client_name: string;
   client_phone: string | null;
@@ -224,6 +225,7 @@ const TrainerAttendancePage = () => {
 
   const selectedSchedule = schedules.find((schedule) => schedule.id === scheduleId);
   const classDateOptions = selectedSchedule ? getClassDateOptions(selectedSchedule.day_of_week) : [];
+  const attendanceClosed = roster.length > 0 && !roster[0].attendance_open;
 
   if (initialLoading) return <div className="py-8 text-center">Загрузка...</div>;
 
@@ -292,10 +294,10 @@ const TrainerAttendancePage = () => {
               placeholder="Например, CL-000001"
               aria-label="Номер клиента"
             />
-            <button type="button" className="btn btn-primary flex items-center gap-2" disabled={!identifier.trim()} onClick={() => void markAttendance(identifier.trim(), true)}>
+            <button type="button" className="btn btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!identifier.trim() || attendanceClosed} onClick={() => void markAttendance(identifier.trim(), true)}>
               <Check size={18} />Отметить посещение
             </button>
-            <button type="button" className="btn btn-secondary flex items-center gap-2" onClick={() => { setError(''); setScannerOpen(true); }}>
+            <button type="button" className="btn btn-secondary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={attendanceClosed} onClick={() => { setError(''); setScannerOpen(true); }}>
               <Camera size={18} />Сканировать QR
             </button>
           </div>
@@ -332,18 +334,21 @@ const TrainerAttendancePage = () => {
                   <p className="text-sm text-textSecondary">
                     {client.membership_name} · {client.remaining_visits === null ? 'безлимит' : `осталось занятий: ${client.remaining_visits}`}
                   </p>
+                  {client.booking_status === 'booked' && !client.attendance_open && (
+                    <p className="mt-1 text-sm text-warning">Время для отметки посещаемости истекло.</p>
+                  )}
                   {client.booking_status !== 'booked' && (
                     <p className={`mt-1 text-sm ${client.booking_status === 'attended' ? 'text-success' : 'text-warning'}`}>
                       {client.booking_status === 'attended' ? 'Посещение отмечено' : 'Неявка отмечена'}
                     </p>
                   )}
                 </div>
-                  {client.booking_status === 'booked' ? (
+                  {client.booking_status === 'booked' && client.attendance_open ? (
                   <div className="flex gap-2">
                     <button type="button" onClick={() => void markAttendance(client.client_code, true)} className="btn btn-primary">Был</button>
                     <button type="button" onClick={() => void markAttendance(client.client_code, false)} className="btn btn-secondary">Не был</button>
                   </div>
-                  ) : client.attendance_id !== null && (
+                  ) : client.attendance_id !== null && client.attendance_open && (
                     <div className="flex flex-wrap items-center gap-2">
                       {editingAttendanceId === client.booking_id ? (
                         <>

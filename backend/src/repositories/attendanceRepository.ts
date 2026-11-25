@@ -11,7 +11,8 @@ export class AttendanceRepository {
     try {
       await client.query('BEGIN');
       const bookingResult = await client.query(
-        `SELECT b.id, b.status, m.remaining_visits
+        `SELECT b.id, b.status, b.class_end + INTERVAL '3 hours' > NOW() AS attendance_open,
+                m.id AS membership_id, m.remaining_visits
          FROM bookings b
          JOIN schedule s ON s.id = b.schedule_id
          JOIN memberships m ON m.id = b.membership_id
@@ -22,8 +23,20 @@ export class AttendanceRepository {
       const booking = bookingResult.rows[0];
       if (!booking) throw new Error('Booking not found for this trainer');
       if (booking.status !== 'booked') throw new Error('Cannot mark attendance for non-booked classes');
+      if (!booking.attendance_open) {
+        throw new Error('Прошло более 3 часов после окончания занятия. Отметить посещение больше нельзя.');
+      }
       if (data.is_present && booking.remaining_visits !== null && booking.remaining_visits <= 0) {
         throw new Error('No remaining visits on this membership');
+      }
+      if (data.is_present && booking.remaining_visits !== null) {
+        const membershipResult = await client.query(
+          `UPDATE memberships
+           SET remaining_visits = remaining_visits - 1
+           WHERE id = $1 AND remaining_visits > 0`,
+          [booking.membership_id]
+        );
+        if (!membershipResult.rowCount) throw new Error('No remaining visits on this membership');
       }
 
       const result = await client.query(
@@ -100,6 +113,7 @@ export class AttendanceRepository {
       await client.query('BEGIN');
       const attendanceResult = await client.query(
         `SELECT a.*, b.id AS booking_id, b.membership_id, b.status AS booking_status,
+                b.class_end + INTERVAL '3 hours' > NOW() AS attendance_open,
                 m.remaining_visits, mt.visit_count
          FROM attendance a
          JOIN bookings b ON b.id = a.booking_id
@@ -112,6 +126,9 @@ export class AttendanceRepository {
       );
       const attendance = attendanceResult.rows[0];
       if (!attendance) throw new Error('Attendance record not found');
+      if (!attendance.attendance_open) {
+        throw new Error('Прошло более 3 часов после окончания занятия. Изменить отметку больше нельзя.');
+      }
 
       const nextPresent = data.is_present ?? attendance.is_present;
       if (!attendance.is_present && nextPresent && attendance.remaining_visits !== null) {

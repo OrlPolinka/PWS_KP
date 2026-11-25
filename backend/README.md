@@ -105,7 +105,7 @@ Copy the `whsec_...` value printed by Stripe CLI into `STRIPE_WEBHOOK_SECRET`. T
 
 Clients can request a membership extension within 10 days after expiry. Unlimited memberships request extra days; visit-limited memberships request extra classes and receive a fresh validity period when approved. Administrators review requests at `/membership-extension-requests`; approving or rejecting a request sends the client a notification. Apply `20261017_membership_extension_requests.sql` before using this feature on an existing database.
 
-Clients can find their unique number and downloadable QR code in **Мой QR-код**. Trainers can select one of their own classes and one of the matching dates on **Посещаемость**, review the roster, and mark a visit by client number or QR scan. Present visits are recorded and decrement a limited membership; no-shows are recorded without decrementing. QR scanning uses a cross-browser scanner and requires camera permission plus HTTPS (localhost is also supported).
+Clients can find their unique number and downloadable QR code in **Мой QR-код**. Trainers can select one of their own classes and one of the matching dates on **Посещаемость**, review the roster, and mark a visit by client number or QR scan. Present visits are recorded and decrement a limited membership; no-shows are recorded without decrementing. Attendance can be marked or corrected until three hours after a class ends; unmarked bookings are then automatically recorded as no-shows. QR scanning uses a cross-browser scanner and requires camera permission plus HTTPS (localhost is also supported).
 
 All authenticated users can open **Личный кабинет** from their avatar or the floating account button to update their name, email, phone, profile photo, and password. Profile fields are validated by the backend; photos are limited to JPEG, PNG, or WebP up to 5 MB. Password-based accounts must provide their current password when changing it; Google-only accounts can set their first password without one.
 
@@ -123,13 +123,16 @@ For an existing installation, apply the migrations in this order:
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_weekly_schedule.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_manage_dance_styles.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261010_harden_news_notifications.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261010_booking_rules.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_prices_byn.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_stripe_payment_currency.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_membership_extension_requests.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261017_client_checkin_codes.sql
 psql -U postgres -d dance_studio -f ../database/migrations/20261122_publish_trainer_profiles.sql
+psql -U postgres -d dance_studio -f ../database/migrations/20261125_enforce_schedule_and_record_links.sql
 ```
 The weekly migration preserves booked class dates while converting schedule entries to weekly slots (Monday = 1, Sunday = 7).
+The latest integrity migration rejects overlapping recurring slots, enforces hall capacity and client ownership links, and protects booking history. If it reports existing conflicts or mismatched ownership, resolve those rows before retrying.
 
 ## Running the Application
 
@@ -160,7 +163,7 @@ npm start
 - `GET /api/users/me` - Get the current user's safe profile fields
 - `GET /api/users/:id` - Get a safe user profile (own profile or Admin only)
 - `PUT /api/users/:id` - Update user (Admin only)
-- `DELETE /api/users/:id` - Delete user (Admin can delete any user except themselves, Clients can delete only their own account)
+- `DELETE /api/users/:id` - Delete a user with no linked client, payment, booking, or conversation history (Admin; clients may request deletion of their own account)
 - `PATCH /api/users/:id/deactivate` - Deactivate user (Admin only)
 - `PATCH /api/users/:id/activate` - Activate user (Admin only)
 
@@ -173,7 +176,7 @@ npm start
 - `POST /api/trainers` - Create trainer profile (Admin)
 - `PUT /api/trainers/:id` - Update trainer profile (Admin)
 - `PATCH /api/trainers/:id/published` - Publish or archive a trainer profile (Admin)
-- `DELETE /api/trainers/:id` - Permanently delete an archived trainer, account, schedules, bookings and attendance (Admin)
+- `DELETE /api/trainers/:id` - Permanently delete an archived trainer only when no client bookings or attendance depend on the schedules (Admin)
 - `GET /api/trainers/me/profile` - Get own profile (Trainer)
 - `PATCH /api/trainers/me/profile` - Edit own profile (Trainer)
 - `POST /api/trainers/me/media` - Upload up to 8 images/videos, 25 MB each (Trainer)
@@ -182,8 +185,8 @@ npm start
 - `GET /api/schedule` - View weekly slots, ordered Monday to Sunday
 - `GET /api/schedule/options` - Load halls and dance styles for the admin form
 - `POST /api/schedule` - Add weekly slot (Admin)
-- `PUT /api/schedule/:id` - Change weekly slot (Admin)
-- `DELETE /api/schedule/:id` - Remove slot and cancel its bookings (Admin)
+- `PUT /api/schedule/:id` - Change a weekly slot (Admin; trainer, hall, style, day, and time cannot change after bookings exist)
+- `DELETE /api/schedule/:id` - Archive/cancel a weekly slot without deleting its booking history (Admin)
 - `PATCH /api/schedule/:id/cancel` - Cancel slot (Admin)
 
 ### Membership Types
@@ -201,7 +204,7 @@ npm start
 - `PUT /api/dance-styles/:id` - Update style (Admin)
 - `DELETE /api/dance-styles/:id` - Archive style without removing schedules or history (Admin)
 - `PATCH /api/dance-styles/:id/active` - Restore an archived style (Admin)
-- `DELETE /api/dance-styles/:id/permanent` - Permanently delete an archived style and related schedules, bookings and attendance (Admin)
+- `DELETE /api/dance-styles/:id/permanent` - Permanently delete an archived style only when no client booking or membership type depends on it (Admin)
 
 ### Memberships
 - `GET /api/memberships/my` - Get my memberships (Client)
@@ -252,6 +255,7 @@ npm start
 - Approve/reject membership extensions
 - Publish news
 - Add, update and remove weekly class slots and trainers
+- Schedule capacity cannot exceed the selected hall; trainer styles must match the trainer's listed directions.
 
 ### Trainer
 - View schedule

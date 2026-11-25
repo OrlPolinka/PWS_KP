@@ -7,7 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "node --require ts-node/register --test test/chatbotService.test.js test/bookingService.test.js test/bookingRepository.test.js test/attendanceRepository.test.js test/userService.test.js test/trainerService.test.js test/messageService.test.js test/archiveService.test.js",
+    "test": "node --require ts-node/register --test test/chatbotService.test.js test/bookingService.test.js test/bookingRepository.test.js test/attendanceRepository.test.js test/scheduleService.test.js test/scheduleRepository.test.js test/userService.test.js test/trainerService.test.js test/messageService.test.js test/archiveService.test.js",
     "test:load": "node scripts/load-test.js",
     "migrate": "ts-node src/database/migrate.ts",
     "seed": "ts-node src/database/seed.ts"
