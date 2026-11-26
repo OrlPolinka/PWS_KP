@@ -3,7 +3,7 @@ import { Calendar, User as UserIcon, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { News } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { normalizeMediaUrl } from '../lib/media';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 import { useActionDialog } from '../components/ActionDialog';
 import Modal from '../components/Modal';
 
@@ -128,7 +128,7 @@ const NewsPage = () => {
 
             {user?.role === 'admin' && !item.is_published && <p className="mb-3 text-sm text-warning">Черновик</p>}
 
-            {item.image_url && <img src={normalizeMediaUrl(item.image_url)} alt="" className="mb-4 max-h-96 w-full rounded-lg object-cover" />}
+            {item.image_url && <img src={normalizeMediaUrl(item.image_url)} alt="" onError={showMediaPlaceholder} className="mb-4 max-h-96 w-full rounded-lg object-cover" />}
 
             <div className="prose prose-invert max-w-none">
               <p className="whitespace-pre-wrap">{item.content}</p>

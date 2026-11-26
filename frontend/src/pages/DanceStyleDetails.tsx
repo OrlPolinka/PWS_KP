@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Clock, MapPin, UserRound } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle, ScheduleListItem } from '../types';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 
 const weekdays = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const difficultyNames = { beginner: 'Начальный', intermediate: 'Средний', advanced: 'Продвинутый' };
@@ -32,15 +33,22 @@ const DanceStyleDetailsPage = () => {
   if (!style) return <div className="py-8 text-center">Загрузка...</div>;
 
   const trainers = Array.from(new Map(schedules.map((schedule) => [schedule.trainer_id, schedule.trainer_name])));
+  const cover = typeof style.cover === 'string' ? style.cover : style.cover?.url;
+  const gallery = (style.gallery || []).map((item) => typeof item === 'string' ? item : item.url);
 
   return (
     <article className="mx-auto max-w-4xl">
       <Link to="/styles" className="mb-6 inline-flex items-center gap-2 text-sm text-primary hover:underline"><ArrowLeft size={16} />К стилям танцев</Link>
       <header className="mb-8">
+        {cover && <img src={normalizeMediaUrl(cover)} alt={`Направление ${style.name}`} onError={showMediaPlaceholder} className="mb-6 max-h-96 w-full rounded-xl object-cover" />}
         <h1 className="text-3xl font-bold">{style.name}</h1>
         {style.difficulty && <p className="mt-2 text-sm text-primary">{difficultyNames[style.difficulty]}</p>}
         {style.description && <p className="mt-4 max-w-2xl leading-relaxed text-textSecondary">{style.description}</p>}
       </header>
+
+      {gallery.length > 0 && <section className="mb-6 grid grid-cols-1 gap-4 border-t border-surface2 py-6 sm:grid-cols-2">
+        {gallery.map((image, index) => <img key={image} src={normalizeMediaUrl(image)} alt={`${style.name}: фото ${index + 1}`} onError={showMediaPlaceholder} className="max-h-96 w-full rounded-lg object-cover" />)}
+      </section>}
 
       <section className="border-t border-surface2 py-6">
         <h2 className="mb-4 text-xl font-bold">Тренеры направления</h2>

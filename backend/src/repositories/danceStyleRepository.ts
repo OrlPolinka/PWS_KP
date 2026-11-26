@@ -4,19 +4,25 @@ export interface DanceStyleRecord {
   id: number;
   name: string;
   description?: string;
+  cover?: string | { url: string; type?: string } | null;
+  gallery?: Array<string | { url: string; type?: string }>;
+  benefits?: string[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   is_active: boolean;
 }
 
 export class DanceStyleRepository {
   static async findById(id: number): Promise<DanceStyleRecord | null> {
-    const result = await query('SELECT id, name, description, difficulty, is_active FROM dance_styles WHERE id = $1', [id]);
+    const result = await query(
+      'SELECT id, name, description, cover, gallery, benefits, difficulty, is_active FROM dance_styles WHERE id = $1',
+      [id]
+    );
     return result.rows[0] || null;
   }
 
   static async findAll(includeArchived = false): Promise<DanceStyleRecord[]> {
     const result = await query(
-      `SELECT id, name, description, difficulty, is_active
+      `SELECT id, name, description, cover, gallery, benefits, difficulty, is_active
        FROM dance_styles
        WHERE ($1::boolean OR is_active = TRUE)
        ORDER BY name`,
@@ -29,7 +35,7 @@ export class DanceStyleRepository {
     const result = await query(
       `INSERT INTO dance_styles (name, description, difficulty)
        VALUES ($1, $2, $3)
-       RETURNING id, name, description, difficulty, is_active`,
+       RETURNING id, name, description, cover, gallery, benefits, difficulty, is_active`,
       [data.name, data.description, data.difficulty]
     );
     return result.rows[0];
@@ -49,7 +55,7 @@ export class DanceStyleRepository {
     const result = await query(
       `UPDATE dance_styles SET ${fields.join(', ')}, updated_at = NOW()
        WHERE id = $${values.length}
-       RETURNING id, name, description, difficulty, is_active`,
+       RETURNING id, name, description, cover, gallery, benefits, difficulty, is_active`,
       values
     );
     return result.rows[0] || null;
@@ -85,7 +91,7 @@ export class DanceStyleRepository {
     const result = await query(
       `UPDATE dance_styles SET is_active = $1, updated_at = NOW()
        WHERE id = $2
-       RETURNING id, name, description, difficulty, is_active`,
+       RETURNING id, name, description, cover, gallery, benefits, difficulty, is_active`,
       [isActive, id]
     );
     return result.rows[0] || null;

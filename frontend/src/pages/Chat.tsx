@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { Message } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { normalizeMediaUrl } from '../lib/media';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 import ChatbotAdminPanel from '../components/ChatbotAdminPanel';
 import { useActionDialog } from '../components/ActionDialog';
 
@@ -291,7 +291,7 @@ const ChatPage = () => {
   const renderContact = (contact: ChatContact, conversation?: Conversation) => {
     const selected = selectedUser?.id === contact.id;
     const avatar = contact.photo_url ? (
-      <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
+      <img src={normalizeMediaUrl(contact.photo_url)} alt="" onError={showMediaPlaceholder} className="h-10 w-10 rounded-full object-cover" />
     ) : (
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
         selected ? 'bg-white/20' : 'bg-primary/20'
@@ -328,7 +328,7 @@ const ChatPage = () => {
   const renderContactHeader = (contact: ChatContact) => {
     const profilePath = getProfilePath(contact);
     const avatar = contact.photo_url ? (
-      <img src={normalizeMediaUrl(contact.photo_url)} alt="" className="h-10 w-10 rounded-full object-cover" />
+      <img src={normalizeMediaUrl(contact.photo_url)} alt="" onError={showMediaPlaceholder} className="h-10 w-10 rounded-full object-cover" />
     ) : (
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
         <UserIcon size={20} className="text-primary" />

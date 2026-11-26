@@ -111,6 +111,9 @@ export interface DanceStyle {
   id: number;
   name: string;
   description?: string;
+  cover?: string | { url: string; type?: string } | null;
+  gallery?: Array<string | { url: string; type?: string }>;
+  benefits?: string[];
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   is_active: boolean;
   dance_style_id?: number | null;

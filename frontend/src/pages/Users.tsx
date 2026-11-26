@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, Search, UserRound } from 'lucide-react';
 import api from '../services/api';
 import { DirectoryUser, UserRole } from '../types';
-import { normalizeMediaUrl } from '../lib/media';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Администратор',
@@ -121,6 +121,7 @@ const UsersPage = () => {
               {person.photo_url ? (
                 <img
                   src={normalizeMediaUrl(person.photo_url)}
+                  onError={showMediaPlaceholder}
                   alt=""
                   className="h-14 w-14 shrink-0 rounded-full object-cover"
                 />

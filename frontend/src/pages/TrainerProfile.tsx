@@ -4,7 +4,7 @@ import { ArrowLeft, CalendarDays, ImagePlus, Save, Trash2, User } from 'lucide-r
 import api from '../services/api';
 import { ScheduleListItem, TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { isUploadedMedia, normalizeMediaUrl } from '../lib/media';
+import { isUploadedMedia, normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 import NumericInput from '../components/NumericInput';
 import { useActionDialog } from '../components/ActionDialog';
 
@@ -136,7 +136,7 @@ const TrainerProfilePage = () => {
       {dialog}
       <Link to={user?.role === 'trainer' ? '/dashboard' : '/trainers'} className="mb-6 inline-flex items-center gap-2 text-sm text-primary hover:underline"><ArrowLeft size={16} />{user?.role === 'trainer' ? 'На главную' : 'К списку тренеров'}</Link>
       <header className="mb-8 flex flex-wrap items-center gap-5">
-        {photoUrl ? <img src={normalizeMediaUrl(photoUrl)} alt={profile.full_name} className="h-24 w-24 rounded-full object-cover" /> : <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/20"><User size={36} className="text-primary" /></div>}
+        {photoUrl ? <img src={normalizeMediaUrl(photoUrl)} alt={profile.full_name} onError={showMediaPlaceholder} className="h-24 w-24 rounded-full object-cover" /> : <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/20"><User size={36} className="text-primary" /></div>}
         <div>
           <h1 className="text-3xl font-bold">{profile.full_name}</h1>
           <p className="mt-1 text-primary">{profile.specialization || 'Тренер'}</p>
@@ -191,8 +191,8 @@ const TrainerProfilePage = () => {
           return <div key={url} className="relative">
             {isUploadedMedia(url)
               ? /\.(mp4|webm)(\?|$)/i.test(url)
-                ? <video src={src} controls className="w-full rounded-lg bg-black" />
-                : <img src={src} alt={`Медиа ${profile.full_name}`} className="max-h-96 w-full rounded-lg object-cover" />
+                ? <video src={src} poster="/media-placeholder.svg" controls className="w-full rounded-lg bg-black" />
+                : <img src={src} alt={`Медиа ${profile.full_name}`} onError={showMediaPlaceholder} className="max-h-96 w-full rounded-lg object-cover" />
               : <p className="rounded-lg bg-surface2 p-4 text-sm text-textSecondary">Это старая ссылка. Загрузите исходный файл с компьютера, чтобы он хранился локально.</p>}
             <button type="button" onClick={() => void removeMedia(url, 'gallery')} disabled={saving} aria-label="Удалить медиафайл" className="absolute right-2 top-2 rounded-full bg-background/90 p-2 text-error disabled:opacity-50"><Trash2 size={16} /></button>
           </div>;
@@ -204,8 +204,8 @@ const TrainerProfilePage = () => {
           </div>
           {isUploadedMedia(profile.video_url)
             ? /\.(mp4|webm)(\?|$)/i.test(profile.video_url)
-              ? <video src={normalizeMediaUrl(profile.video_url)} controls className="max-h-96 w-full rounded-lg bg-black" />
-              : <img src={normalizeMediaUrl(profile.video_url)} alt={`Медиа ${profile.full_name}`} className="max-h-96 w-full rounded-lg object-cover" />
+              ? <video src={normalizeMediaUrl(profile.video_url)} poster="/media-placeholder.svg" controls className="max-h-96 w-full rounded-lg bg-black" />
+              : <img src={normalizeMediaUrl(profile.video_url)} alt={`Медиа ${profile.full_name}`} onError={showMediaPlaceholder} className="max-h-96 w-full rounded-lg object-cover" />
             : <p className="text-sm text-textSecondary">Чтобы хранить видео локально, выберите исходный файл с компьютера и загрузите его в галерею.</p>}
         </div>}
         {error && <p role="alert" className="text-error">{error}</p>}
@@ -216,14 +216,14 @@ const TrainerProfilePage = () => {
         {profile.achievements && <section><h2 className="mb-2 text-lg font-bold">Достижения</h2><p className="whitespace-pre-wrap text-textSecondary">{profile.achievements}</p></section>}
         {(profile.custom_page_title || profile.custom_page_content) && <section><h2 className="mb-2 text-lg font-bold">{profile.custom_page_title || 'О тренере'}</h2><p className="whitespace-pre-wrap text-textSecondary">{profile.custom_page_content}</p></section>}
         {profile.video_url && isUploadedMedia(profile.video_url) && (/\.(mp4|webm)(\?|$)/i.test(profile.video_url)
-          ? <video src={normalizeMediaUrl(profile.video_url)} controls className="max-h-[32rem] w-full rounded-lg bg-black" />
-          : <img src={normalizeMediaUrl(profile.video_url)} alt={`Медиа ${profile.full_name}`} className="max-h-96 w-full rounded-lg object-cover" />)}
+          ? <video src={normalizeMediaUrl(profile.video_url)} poster="/media-placeholder.svg" controls className="max-h-[32rem] w-full rounded-lg bg-black" />
+          : <img src={normalizeMediaUrl(profile.video_url)} alt={`Медиа ${profile.full_name}`} onError={showMediaPlaceholder} className="max-h-96 w-full rounded-lg object-cover" />)}
         {gallery.some((item) => isUploadedMedia(mediaUrl(item))) && <section><h2 className="mb-4 text-xl font-bold">Фото и видео</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{gallery.filter((item) => isUploadedMedia(mediaUrl(item))).map((item) => {
           const url = mediaUrl(item);
           const src = normalizeMediaUrl(url);
           return /\.(mp4|webm)(\?|$)/i.test(url)
-            ? <video key={url} src={src} controls className="w-full rounded-lg bg-black" />
-            : <img key={url} src={src} alt={`Медиа ${profile.full_name}`} className="max-h-96 w-full rounded-lg object-cover" />;
+            ? <video key={url} src={src} poster="/media-placeholder.svg" controls className="w-full rounded-lg bg-black" />
+            : <img key={url} src={src} alt={`Медиа ${profile.full_name}`} onError={showMediaPlaceholder} className="max-h-96 w-full rounded-lg object-cover" />;
         })}</div></section>}
         {!profile.bio && !profile.education && !profile.achievements && !gallery.some((item) => isUploadedMedia(mediaUrl(item))) && !(profile.video_url && isUploadedMedia(profile.video_url)) && <p className="text-textSecondary">Тренер пока не добавил информацию о себе.</p>}
       </div>}

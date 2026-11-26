@@ -109,6 +109,20 @@ The existing database installed on your computer is not copied into Docker
 automatically, so the Docker database starts empty.
 Do not use `down -v` unless you intend to delete the Docker database.
 
+To explicitly replace all application data in the Docker database with the
+large demo dataset, rebuild the backend and run the guarded seed command from
+PowerShell at the repository root:
+
+```powershell
+docker compose up --build -d backend
+$DbName = (docker compose exec -T backend printenv DB_NAME).Trim()
+docker compose exec backend npm run seed:demo -- "--confirm-reset=$DbName"
+```
+
+This reset is never automatic. It clears existing database records, but leaves
+uploaded files intact. Demo accounts and media-folder instructions are in
+[database/README.md](database/README.md).
+
 ## Features
 
 ### Authentication

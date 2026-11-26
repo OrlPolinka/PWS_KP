@@ -4,7 +4,7 @@ import { User, Star, ArrowUpRight, Archive, Plus, RotateCcw, Trash2 } from 'luci
 import api from '../services/api';
 import { TrainerListItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { normalizeMediaUrl } from '../lib/media';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 import { matchesSearchPrefix } from '../lib/search';
 import NumericInput from '../components/NumericInput';
 import { useActionDialog } from '../components/ActionDialog';
@@ -208,6 +208,7 @@ const TrainersPage = () => {
               {trainer.photo_url ? (
                 <img
                   src={normalizeMediaUrl(trainer.photo_url)}
+                  onError={showMediaPlaceholder}
                   alt={trainer.full_name}
                   className="w-16 h-16 rounded-full object-cover"
                 />

@@ -4,6 +4,7 @@ import { Music, Calendar, Plus, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { DanceStyle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeMediaUrl, showMediaPlaceholder } from '../lib/media';
 import { matchesSearchPrefix } from '../lib/search';
 import { useActionDialog } from '../components/ActionDialog';
 import Modal from '../components/Modal';
@@ -110,6 +111,7 @@ const DanceStylesPage = () => {
       (!difficultyFilter || style.difficulty === difficultyFilter) &&
       (user?.role !== 'admin' || statusFilter === 'all' || (statusFilter === 'active' ? style.is_active : !style.is_active));
   });
+  const coverFor = (style: DanceStyle) => typeof style.cover === 'string' ? style.cover : style.cover?.url;
 
   if (loading) {
     return <div className="text-center py-8">Загрузка...</div>;
@@ -150,6 +152,7 @@ const DanceStylesPage = () => {
           </div>
         ) : visibleStyles.map((style) => (
           <article key={style.id} className="card min-w-0">
+            {coverFor(style) && <img src={normalizeMediaUrl(coverFor(style))} alt={`Направление ${style.name}`} onError={showMediaPlaceholder} className="mb-4 h-44 w-full rounded-lg object-cover" />}
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
                 <Music size={24} className="text-primary" />
